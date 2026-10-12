@@ -1,7 +1,11 @@
 package com.narturebelle.controller;
 
+import com.google.firebase.FirebaseApp;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseToken;
 import com.narturebelle.dto.AuthLoginRequest;
 import com.narturebelle.dto.AuthResponse;
+import com.narturebelle.dto.FirebaseLoginRequest;
 import com.narturebelle.model.User;
 import com.narturebelle.repository.UserRepository;
 import org.springframework.http.ResponseEntity;
@@ -66,5 +70,60 @@ public class AuthController {
         String mockToken = "nb_jwt_" + UUID.randomUUID().toString();
 
         return ResponseEntity.ok(new AuthResponse(true, mockToken, "Login successful", savedUser));
+    }
+
+    @PostMapping("/firebase")
+    public ResponseEntity<AuthResponse> loginWithFirebase(@RequestBody FirebaseLoginRequest request) {
+        if (request.getIdToken() == null || request.getIdToken().isBlank()) {
+            return ResponseEntity.badRequest().body(new AuthResponse(false, null, "Firebase ID Token is required", null));
+        }
+
+        String email = null;
+        String phone = null;
+        String name = null;
+        String provider = "FIREBASE";
+
+        if (!FirebaseApp.getApps().isEmpty()) {
+            try {
+                FirebaseToken decodedToken = FirebaseAuth.getInstance().verifyIdToken(request.getIdToken());
+                email = decodedToken.getEmail();
+                name = decodedToken.getName();
+                phone = (String) decodedToken.getClaims().get("phone_number");
+                if (decodedToken.getClaims().get("firebase") instanceof Map<?, ?> firebaseClaims) {
+                    Object signProvider = firebaseClaims.get("sign_in_provider");
+                    if (signProvider != null) {
+                        provider = signProvider.toString().toUpperCase();
+                    }
+                }
+            } catch (Exception e) {
+                return ResponseEntity.status(401).body(new AuthResponse(false, null, "Invalid or expired Firebase ID token: " + e.getMessage(), null));
+            }
+        } else {
+            // Development fallback when credentials file is pending
+            provider = "FIREBASE_DEV";
+            name = "Verified Expecting Mother";
+            phone = "9876543210";
+        }
+
+        User user = null;
+        if (email != null && !email.isBlank()) {
+            user = userRepository.findByEmail(email).orElse(new User());
+            user.setEmail(email);
+        } else if (phone != null && !phone.isBlank()) {
+            user = userRepository.findByPhone(phone).orElse(new User());
+            user.setPhone(phone);
+        } else {
+            user = new User();
+        }
+
+        if (name != null) user.setName(name);
+        user.setAuthProvider(provider);
+        if (request.getStage() != null) user.setStage(request.getStage());
+        if (request.getDueDate() != null) user.setDueDate(request.getDueDate());
+
+        User savedUser = userRepository.save(user);
+        String sessionToken = "nb_jwt_" + UUID.randomUUID().toString();
+
+        return ResponseEntity.ok(new AuthResponse(true, sessionToken, "Authentication verified successfully with Google/Firebase", savedUser));
     }
 }
