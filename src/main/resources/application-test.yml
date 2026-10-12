@@ -1,0 +1,22 @@
+# =========================================================================
+# TEST ENVIRONMENT CONFIGURATION
+# =========================================================================
+server:
+  port: 0
+
+spring:
+  datasource:
+    url: jdbc:h2:mem:narturebelle_testdb;DB_CLOSE_DELAY=-1
+  jpa:
+    show-sql: true
+
+features:
+  nurse-companion: true
+  hospital-leads: true
+  doctor-live-sessions: true
+  assessment-voucher: true
+  baby-care-products: false
+
+logging:
+  level:
+    com.narturebelle: DEBUG

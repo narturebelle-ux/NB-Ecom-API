@@ -17,6 +17,7 @@ com\narturebelle\controller\DoctorSessionController.class
 com\narturebelle\dto\AuthLoginRequest.class
 com\narturebelle\model\HospitalPartner.class
 com\narturebelle\model\Product.class
+com\narturebelle\dto\FirebaseLoginRequest.class
 com\narturebelle\model\ChecklistTask.class
 com\narturebelle\dto\DoctorRsvpRequest.class
 com\narturebelle\model\NurseBooking.class
@@ -33,4 +34,5 @@ com\narturebelle\model\PregnancyStage.class
 com\narturebelle\repository\ProductRepository.class
 com\narturebelle\repository\DoctorRsvpRepository.class
 com\narturebelle\dto\AuthResponse.class
+com\narturebelle\config\FirebaseConfig.class
 com\narturebelle\config\CorsConfig$1.class

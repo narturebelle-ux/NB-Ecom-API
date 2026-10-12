@@ -1,0 +1,26 @@
+# =========================================================================
+# STAGING ENVIRONMENT CONFIGURATION
+# =========================================================================
+server:
+  port: 8085
+
+spring:
+  datasource:
+    url: ${STAGE_DB_URL:jdbc:h2:mem:narturebelle_stagedb;DB_CLOSE_DELAY=-1}
+    username: ${STAGE_DB_USER:sa}
+    password: ${STAGE_DB_PASS:password}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+
+features:
+  nurse-companion: true
+  hospital-leads: true
+  doctor-live-sessions: true
+  assessment-voucher: true
+  baby-care-products: true # Enabled in Staging for QA / feature verification
+
+logging:
+  level:
+    com.narturebelle: DEBUG

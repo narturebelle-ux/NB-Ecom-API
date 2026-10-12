@@ -1,0 +1,53 @@
+spring:
+  application:
+    name: narturebelle-backend
+  profiles:
+    active: default
+
+  # Common Database Configuration (Default In-Memory)
+  datasource:
+    url: jdbc:h2:mem:narturebelledb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: password
+
+  # Common JPA / Hibernate Configuration
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+    open-in-view: false
+
+  # Common H2 Web Console (available at http://localhost:8085/h2-console)
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+      settings:
+        web-allow-others: true
+
+# Server Port
+server:
+  port: 8085
+
+# Firebase Credentials Path
+firebase:
+  credentials:
+    path: classpath:firebase-service-account.json
+
+# =========================================================================
+# FEATURE TOGGLES (Free & Open Source - Governed by Spring Boot Profiles)
+# =========================================================================
+features:
+  nurse-companion: true        # Stream 3: 'Maa Sakhi' Nurse Care plan & on-call triage
+  hospital-leads: true         # Stream 2: Local maternity hospital directory & tour bookings
+  doctor-live-sessions: true   # OB-GYN interactive live streams & RSVP
+  assessment-voucher: true     # Instant ₹100 NARTURE10 discount voucher on diagnostic completion
+  baby-care-products: false    # Future expansion (0-5 years) - hidden by default
+
+# Logging Configuration
+logging:
+  level:
+    root: INFO
+    com.narturebelle: INFO
