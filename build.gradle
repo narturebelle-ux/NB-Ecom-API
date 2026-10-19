@@ -26,12 +26,13 @@ dependencies {
     // Firebase Admin SDK for token verification
     implementation 'com.google.firebase:firebase-admin:9.4.3'
 
-    // In-memory Database
-    runtimeOnly 'com.h2database:h2'
+    // Postgres Database (all environments — Supabase)
+    runtimeOnly 'org.postgresql:postgresql'
 
-    // Testing
+    // Testing (H2 is test-only now; Supabase backs dev/stage/prod)
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    testRuntimeOnly 'com.h2database:h2'
 }
 
 tasks.named('test') {

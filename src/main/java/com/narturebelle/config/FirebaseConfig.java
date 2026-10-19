@@ -34,26 +34,35 @@ public class FirebaseConfig {
             return;
         }
 
-        try {
-            Resource resource = resourceLoader.getResource(credentialsPath);
-            if (resource.exists()) {
-                try (InputStream is = resource.getInputStream()) {
-                    FirebaseOptions options = FirebaseOptions.builder()
-                            .setCredentials(GoogleCredentials.fromStream(is))
-                            .build();
-                    FirebaseApp.initializeApp(options);
-                    log.info(">>> Firebase Admin SDK initialized successfully with credentials: {}", credentialsPath);
-                }
-            } else {
-                log.warn(">>> [FIREBASE NOTICE]: Firebase credentials file '{}' was not found.", credentialsPath);
-                log.warn(">>> To enable real backend token verification:");
-                log.warn(">>> 1. Open Firebase Console -> Project Settings -> Service Accounts");
-                log.warn(">>> 2. Click 'Generate new private key' and save as 'firebase-service-account.json'");
-                log.warn(">>> 3. Place it in 'NB-Ecomm-API/src/main/resources/' or specify 'firebase.credentials.path'");
-                log.warn(">>> The application will run in dev/fallback mode until then.");
+        Resource resource = resourceLoader.getResource(credentialsPath);
+        if (resource.exists()) {
+            // Local dev: explicit service account JSON on disk (gitignored).
+            try (InputStream is = resource.getInputStream()) {
+                FirebaseOptions options = FirebaseOptions.builder()
+                        .setCredentials(GoogleCredentials.fromStream(is))
+                        .build();
+                FirebaseApp.initializeApp(options);
+                log.info(">>> Firebase Admin SDK initialized with credentials file: {}", credentialsPath);
+                return;
+            } catch (Exception e) {
+                log.error("Failed to initialize Firebase Admin SDK from '{}': {}", credentialsPath, e.getMessage());
+                return;
             }
+        }
+
+        try {
+            // Cloud Run / GCP: use the service's attached IAM identity, no JSON file needed.
+            FirebaseOptions options = FirebaseOptions.builder()
+                    .setCredentials(GoogleCredentials.getApplicationDefault())
+                    .build();
+            FirebaseApp.initializeApp(options);
+            log.info(">>> Firebase Admin SDK initialized via Application Default Credentials.");
         } catch (Exception e) {
-            log.error("Failed to initialize Firebase Admin SDK: {}", e.getMessage());
+            log.warn(">>> [FIREBASE NOTICE]: No credentials file at '{}' and Application Default Credentials unavailable.", credentialsPath);
+            log.warn(">>> For local dev: generate a service account JSON (Firebase Console -> Project Settings -> Service Accounts)");
+            log.warn(">>> and place it at 'NB-Ecomm-API/src/main/resources/firebase-service-account.json' (gitignored).");
+            log.warn(">>> On Cloud Run: attach a service account with Firebase Admin permissions to the service.");
+            log.warn(">>> The application will run in dev/fallback mode until then.");
         }
     }
 }

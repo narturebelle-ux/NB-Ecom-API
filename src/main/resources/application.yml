@@ -4,32 +4,32 @@ spring:
   profiles:
     active: default
 
-  # Common Database Configuration (Default In-Memory)
+  # Common Database Configuration — Supabase PostgreSQL (session pooler) for all non-test profiles.
+  # No defaults on purpose: never hard-code credentials, fail fast if env vars are missing.
   datasource:
-    url: jdbc:h2:mem:narturebelledb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
-    driver-class-name: org.h2.Driver
-    username: sa
-    password: password
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 5
 
   # Common JPA / Hibernate Configuration
   jpa:
-    database-platform: org.hibernate.dialect.H2Dialect
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
-      ddl-auto: create-drop
+      ddl-auto: update
     show-sql: false
     open-in-view: false
 
-  # Common H2 Web Console (available at http://localhost:8085/h2-console)
-  h2:
-    console:
-      enabled: true
-      path: /h2-console
-      settings:
-        web-allow-others: true
-
 # Server Port
 server:
-  port: 8085
+  port: ${PORT:8085}
+
+# CORS — comma-separated list, e.g. "https://narturebelle.com,https://www.narturebelle.com".
+# Defaults to "*" for local dev/test; stage/prod override via CORS_ALLOWED_ORIGINS.
+cors:
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:*}
 
 # Firebase Credentials Path
 firebase:

@@ -45,12 +45,12 @@ public class Product {
 
     private String category; // e.g., "Nutrition", "Sleep Comfort", "Body Care", "Labor Prep"
 
-    @ElementCollection
+    @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "product_benefits", joinColumns = @JoinColumn(name = "product_id"))
     @Column(name = "benefit")
     private List<String> keyBenefits = new ArrayList<>();
 
-    @ElementCollection
+    @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "product_symptoms", joinColumns = @JoinColumn(name = "product_id"))
     @Column(name = "symptom")
     private List<String> targetSymptoms = new ArrayList<>();

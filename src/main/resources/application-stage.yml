@@ -1,14 +1,13 @@
 # =========================================================================
 # STAGING ENVIRONMENT CONFIGURATION
 # =========================================================================
-server:
-  port: 8085
+# Datasource (DB_URL/DB_USERNAME/DB_PASSWORD) is inherited from application.yml —
+# points at the Supabase session pooler via env vars, no defaults.
+
+cors:
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:*}
 
 spring:
-  datasource:
-    url: ${STAGE_DB_URL:jdbc:h2:mem:narturebelle_stagedb;DB_CLOSE_DELAY=-1}
-    username: ${STAGE_DB_USER:sa}
-    password: ${STAGE_DB_PASS:password}
   jpa:
     hibernate:
       ddl-auto: update

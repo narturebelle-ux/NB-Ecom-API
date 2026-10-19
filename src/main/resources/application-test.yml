@@ -1,13 +1,21 @@
 # =========================================================================
 # TEST ENVIRONMENT CONFIGURATION
 # =========================================================================
+# Fully overrides the Supabase datasource from application.yml with in-memory H2,
+# so tests never need real DB_URL/DB_USERNAME/DB_PASSWORD env vars.
 server:
   port: 0
 
 spring:
   datasource:
     url: jdbc:h2:mem:narturebelle_testdb;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: password
   jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: create-drop
     show-sql: true
 
 features:
