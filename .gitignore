@@ -4,7 +4,7 @@ build/
 bin/
 !gradle/wrapper/gradle-wrapper.jar
 
-# Maven
+# Maven (project migrated to Gradle; kept for safety if invoked)
 target/
 pom.xml.tag
 pom.xml.releaseBackup
