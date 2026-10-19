@@ -24,6 +24,13 @@ public class User {
     @Column(unique = true)
     private String phone;
 
+    @Column(unique = true)
+    private String firebaseUid;
+
+    private Boolean emailVerified = false;
+
+    private Boolean phoneVerified = false;
+
     private String authProvider; // "GOOGLE", "PHONE", "LOCAL", "FIREBASE_DEV"
 
     @Enumerated(EnumType.STRING)
@@ -86,6 +93,15 @@ public class User {
 
     public String getPhone() { return phone; }
     public void setPhone(String phone) { this.phone = phone; }
+
+    public String getFirebaseUid() { return firebaseUid; }
+    public void setFirebaseUid(String firebaseUid) { this.firebaseUid = firebaseUid; }
+
+    public Boolean getEmailVerified() { return emailVerified; }
+    public void setEmailVerified(Boolean emailVerified) { this.emailVerified = emailVerified; }
+
+    public Boolean getPhoneVerified() { return phoneVerified; }
+    public void setPhoneVerified(Boolean phoneVerified) { this.phoneVerified = phoneVerified; }
 
     public String getAuthProvider() { return authProvider; }
     public void setAuthProvider(String authProvider) { this.authProvider = authProvider; }
