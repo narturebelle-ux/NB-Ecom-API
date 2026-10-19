@@ -3,10 +3,7 @@
 # =========================================================================
 # Datasource (DB_URL/DB_USERNAME/DB_PASSWORD) is inherited from application.yml —
 # points at the Supabase session pooler via env vars, no defaults.
-
-cors:
-  # No default — required. Set to the real production domain(s), comma-separated, no wildcard in prod.
-  allowed-origins: ${CORS_ALLOWED_ORIGINS}
+# CORS (cors.allowed-origins) is also inherited from application.yml — same for every environment.
 
 spring:
   jpa:
