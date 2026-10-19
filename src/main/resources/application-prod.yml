@@ -1,0 +1,27 @@
+# =========================================================================
+# PRODUCTION ENVIRONMENT CONFIGURATION
+# =========================================================================
+# Datasource (DB_URL/DB_USERNAME/DB_PASSWORD) is inherited from application.yml —
+# points at the Supabase session pooler via env vars, no defaults.
+
+cors:
+  # No default — required. Set to the real production domain(s), comma-separated, no wildcard in prod.
+  allowed-origins: ${CORS_ALLOWED_ORIGINS}
+
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate # Never auto-create/update schema in production
+    show-sql: false
+
+features:
+  nurse-companion: ${FEATURE_NURSE_COMPANION:true}
+  hospital-leads: ${FEATURE_HOSPITAL_LEADS:true}
+  doctor-live-sessions: ${FEATURE_DOCTOR_LIVE:true}
+  assessment-voucher: ${FEATURE_ASSESSMENT_VOUCHER:true}
+  baby-care-products: ${FEATURE_BABY_CARE:false}
+
+logging:
+  level:
+    root: WARN
+    com.narturebelle: INFO

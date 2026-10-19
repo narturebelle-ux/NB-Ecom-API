@@ -1,0 +1,25 @@
+# =========================================================================
+# STAGING ENVIRONMENT CONFIGURATION
+# =========================================================================
+# Datasource (DB_URL/DB_USERNAME/DB_PASSWORD) is inherited from application.yml —
+# points at the Supabase session pooler via env vars, no defaults.
+
+cors:
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:*}
+
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+
+features:
+  nurse-companion: true
+  hospital-leads: true
+  doctor-live-sessions: true
+  assessment-voucher: true
+  baby-care-products: true # Enabled in Staging for QA / feature verification
+
+logging:
+  level:
+    com.narturebelle: DEBUG

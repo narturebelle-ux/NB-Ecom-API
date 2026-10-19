@@ -1,0 +1,30 @@
+# Gradle
+.gradle/
+build/
+bin/
+!gradle/wrapper/gradle-wrapper.jar
+
+# Maven (project migrated to Gradle; kept for safety if invoked)
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+
+# Logs and Crash Dumps
+*.log
+hs_err_pid*
+replay_pid*
+
+# Credentials & Service Accounts
+*firebase-service-account*.json
+*.env
+
+# IDEs
+.idea/
+*.iml
+.classpath
+.project
+.settings/
+.vscode/

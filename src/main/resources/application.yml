@@ -1,0 +1,53 @@
+spring:
+  application:
+    name: narturebelle-backend
+  profiles:
+    active: default
+
+  # Common Database Configuration — Supabase PostgreSQL (session pooler) for all non-test profiles.
+  # No defaults on purpose: never hard-code credentials, fail fast if env vars are missing.
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 5
+
+  # Common JPA / Hibernate Configuration
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    open-in-view: false
+
+# Server Port
+server:
+  port: ${PORT:8085}
+
+# CORS — comma-separated list, e.g. "https://narturebelle.com,https://www.narturebelle.com".
+# Defaults to "*" for local dev/test; stage/prod override via CORS_ALLOWED_ORIGINS.
+cors:
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:*}
+
+# Firebase Credentials Path
+firebase:
+  credentials:
+    path: classpath:firebase-service-account.json
+
+# =========================================================================
+# FEATURE TOGGLES (Free & Open Source - Governed by Spring Boot Profiles)
+# =========================================================================
+features:
+  nurse-companion: true        # Stream 3: 'Maa Sakhi' Nurse Care plan & on-call triage
+  hospital-leads: true         # Stream 2: Local maternity hospital directory & tour bookings
+  doctor-live-sessions: true   # OB-GYN interactive live streams & RSVP
+  assessment-voucher: true     # Instant ₹100 NARTURE10 discount voucher on diagnostic completion
+  baby-care-products: false    # Future expansion (0-5 years) - hidden by default
+
+# Logging Configuration
+logging:
+  level:
+    root: INFO
+    com.narturebelle: INFO
