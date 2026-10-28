@@ -40,23 +40,31 @@ Get this token from the client SDK after any sign-in (`await firebaseUser.getIdT
 POST /api/v1/auth/firebase
 Authorization: Bearer <token>
 ```
-No request body. This creates the user in our DB on first login, or updates email/phone/verification status on every later login. Response:
+No request body. This creates the user in our DB on first login, or updates email/phone/verification status on every later login. Response, **first-ever login for a new user, signed up via Google**:
 ```json
 {
-  "id": 1,
-  "firebaseUid": "uzVqamGnDuMKO19MzWXvE1JzDPx1",
-  "email": "user@example.com",
+  "id": 6,
+  "firebaseUid": "gKWI7G8oymWbLfIXvxQytHd2vEf1",
+  "email": "anjali.verma@example.com",
   "emailVerified": false,
   "phone": null,
   "phoneVerified": false,
-  "firstName": null,
-  "lastName": null,
+  "firstName": "Anjali",
+  "lastName": "Verma",
   "stage": null,
   "dueDate": null,
   "role": "USER"
 }
 ```
-`firstName`/`lastName`/`stage`/`dueDate` are null until the user fills out their profile via `PUT /users/me` — they're not derived from Firebase.
+**`firstName`/`lastName` are now auto-populated on account creation — this is new, don't assume they're always null.** Where the guess comes from, and how confident you should treat it:
+
+| Sign-in method | Source | Confidence |
+|---|---|---|
+| Google | Google's real display name, split on whitespace | High — it's their actual name |
+| Email/Password | Guessed from the email's local-part (`anjali.verma@...` → "Anjali"/"Verma") | **Low — just a guess.** Consider showing it pre-filled but editable during onboarding, not as if it were confirmed. |
+| Phone only | Nothing to derive from | `firstName`/`lastName` stay `null`, same as before — you still need to ask |
+
+This only happens **once**, at the moment the row is created. Calling `/auth/firebase` again on a later login (or even if the user's Google display name changes) will **never** overwrite `firstName`/`lastName` — once a user has (or has been given) a name, `PUT /users/me` is the only thing that changes it. `stage`/`dueDate` are still always `null` until set via `PUT /users/me` — those aren't derived from anything.
 
 **Profile endpoints:**
 ```
