@@ -109,24 +109,37 @@ src/main/resources/
 ```
 No `src/test` directory exists in any commit, ever.
 
-## 5. Known gaps / pending work
-- **No Split.io integration** despite the branch name `Added_Split_IO` — `FeatureToggleProperties` is static YAML booleans, not a real flagging SDK.
-- **No tests at all**, despite `spring-boot-starter-test` being a dependency.
-- **No security layer**: no Spring Security, no JWT validation on the mock `/login`/`/firebase` tokens, `UserController` has no ownership checks (any ID is readable/writable by anyone).
-- **OTP flow is fake**: `/send-otp` just echoes `123456`, no `/verify-otp` endpoint exists.
-- **No input validation** anywhere despite the validation starter being present.
-- **No global exception handler** — unhandled errors leak default Spring stack traces.
-- **No order/cart/payment/checkout** — despite being named "Ecomm-API", there is no way to actually buy a `Product`; all "purchase-like" flows (nurse booking, doctor RSVP, lead capture) are lead-gen forms only.
-- **Race condition** in `DoctorSessionController.rsvpSession` (`attendeeCount` read-then-increment-then-save, no transaction/locking).
-- **No pagination** anywhere; all list endpoints use `findAll()`.
-- `ddl-auto: update` in dev/stage means schema drift is auto-applied; prod uses `validate`, so **tables must be manually created in Supabase first** (or let `update` run once against Supabase from a dev/stage profile boot) before a prod deploy. Tables Hibernate manages: `users`, `products` (+ `product_benefits`, `product_symptoms`), `checklist_tasks`, `hospital_partners`, `nurse_packages` (+ `nurse_package_features`), `nurse_bookings`, `doctor_sessions`, `doctor_rsvps`, `lead_profiles` (+ `lead_symptoms`).
+## 5. Known gaps / pending work *(as of §1-4, i.e. the `main` merge at `661caee` — mostly resolved since; see §6)*
+- ~~No security layer~~, ~~no input validation~~, ~~no global exception handler~~, ~~OTP flow is fake~~, ~~No Split.io integration~~ — **all resolved in §6 below.**
+- **No order/cart/payment/checkout** — despite being named "Ecomm-API", there is no way to actually buy a `Product`; all "purchase-like" flows (nurse booking, doctor RSVP, lead capture) are lead-gen forms only. **Still true** — and now explicitly out of scope: the product pivoted to a care-coordination platform (§6), where cart/checkout isn't the roadmap's near-term focus either.
+- **Race condition** in `DoctorSessionController.rsvpSession` (`attendeeCount` read-then-increment-then-save, no transaction/locking). **Still true, untouched** — Phase 1.4 of the brief explicitly says leave the doctor-session/nurse/lead/products/hospitals/checklists endpoints alone.
+- **No pagination** anywhere; all list endpoints use `findAll()`. **Still true.**
 - The ~100MB jar is gone from tracking but still lives in `master`'s/`main`'s older commit objects (`bb26583`, `f86ab77`) — repo clone size is still bloated unless history is rewritten later (explicitly declined so far).
-- `codestepup` and `Added_Split_IO` remote branches are now stale relative to `main`/`master` and may need cleanup or reconciliation.
+- `codestepup` and `Added_Split_IO` remote branches are stale relative to `main`/`master`/`firebase-setup` and may need cleanup or reconciliation.
 
----
+## 6. Firebase auth + the care-coordination pivot (Phase 0 + Phase 1) — everything since §1-5
 
-### Suggested focus areas for the next review
-1. Secure the API — real auth/session validation, ownership checks on `UserController`, input validation on all DTOs.
-2. Design the missing order/cart/payment domain — this is the actual "Ecomm" gap.
-3. Review the Supabase schema given `ddl-auto` behavior — confirm tables exist correctly before prod relies on `validate`.
-4. Decide whether `Added_Split_IO`'s original intent (real feature flagging via Split.io) should still be implemented, or whether the YAML-based toggles are sufficient going forward.
+Everything in this section happened on the `firebase-setup` branch, after the work in §1-5. It's a large, two-part change:
+
+**Part A — real Firebase authentication** (the mock `/send-otp`/`/login` from §1 are now dev-only, gated `@Profile("!prod & !stage")`, kept only for local convenience — real auth is Firebase ID tokens on every request, verified server-side, no app-issued session token). Full contract, request/response shapes, and error codes are in `UI_INTEGRATION_GUIDE.md` §1-6 — that document is kept in sync and is the source of truth for the HTTP contract, not duplicated here. Highlights: `FirebaseAuthenticationFilter`/`FirebaseUserPrincipal`/`AuthorizationService` (stateless Spring Security), `GET/PATCH /api/v1/me` (+ deprecated `/api/v1/users/me` alias), role-gated `/api/v1/admin/**`, Swagger/OpenAPI (springdoc) with a working "Authorize" button, CORS locked to `narturebelle.com`/`www.narturebelle.com`/`stage-narturebelle.com` + any `http://localhost:*` for dev — not a wildcard.
+
+**Part B — the roadmap pivot.** The user pasted `../NARTUREBELLE_ROADMAP.md` (sibling directory, not a git repo — a plain shared file, not committed here) and `PHASE_0_1_BRIEF.md` (committed in this repo), reframing NartureBelle from a product store into a **care-coordination platform**. `PHASE_0_1_BRIEF.md` is the authoritative, highly prescriptive task spec (exact enums, table shapes, endpoint behaviors, error codes) — read it directly for anything this summary doesn't cover. Implemented exactly as specified, one commit per numbered task, each verified via the full test suite **and** a live boot against the real stage Supabase DB with real Firebase-signed-up users before committing:
+
+- **0.1 Flyway** — `V1__baseline.sql` onward; `ddl-auto: validate` everywhere non-test; `spring.flyway.baseline-on-migrate: true` so the already-populated stage/prod DBs adopt V1 as "already applied" instead of re-running `CREATE TABLE`. Test profile still skips Flyway entirely (`spring.flyway.enabled: false`, H2 `create-drop`) — **anything seeded via a migration must also be seeded in `DataInitializer`** (guarded by `count() > 0`) or tests never see it. Verified on a genuinely empty Postgres (Docker, not just the already-migrated stage DB) — all 7 migrations (V1-V7) apply cleanly from scratch.
+- **0.2 Roles** — new `Role` enum (18 values), `user_roles` many-to-many table, `USER`→`MOTHER`/`ADMIN`→`SUPER_ADMIN` migration backfill. Legacy single `role` column kept readable, nothing writes to it. `/api/v1/admin/**` now `hasAnyAuthority` across the 6 `*_ADMIN` roles.
+- **0.3 Audit log** — `audit_events`, append-only by omission (no update/delete repo methods). `AuditService.record(...)`, called from every write Phase 1 added.
+- **0.4 Validation & errors** — `@Valid` + Bean Validation on request DTOs; `GlobalExceptionHandler` now has a `MethodArgumentNotValidException` → 400 `VALIDATION_FAILED` handler and an `Exception` catch-all → 500 `INTERNAL_ERROR`. **Watch out if adding new exception handlers**: the catch-all will swallow anything without a more-specific handler, including `AccessDeniedException` (must re-throw, not handle, so Spring Security's own 403 flow still fires) and Spring's "no route matched" exception (`NoResourceFoundException` in practice on Spring 6.1+, not the classic `NoHandlerFoundException` — both are handled).
+- **0.5 Feature flags in the DB** — `feature_flags` table replaces the YAML-only toggles from §1; `GET /api/v1/features` unchanged shape; new `PATCH /api/v1/admin/feature-flags/{key}` (admin-only, audited, requires `reason`). **This finally answers §1's "Suggested focus area #4"**: the YAML-based toggles are superseded by a real DB-backed flag service, not Split.io.
+- **0.6-0.7 `/me` + name backfill** — see Part A above and `UI_INTEGRATION_GUIDE.md`.
+- **1.1 Consent** — `consent_documents`/`consents`, `GET /api/v1/consent-documents/current` (public), `GET/POST /api/v1/me/consents`, `POST /api/v1/me/consents/{type}/revoke`. New `@RequireConsent` annotation + `ConsentCheckInterceptor` (same `HandlerInterceptor` pattern as the pre-existing `@RequireVerified`), gating Journey and Dashboard endpoints with 403 `CONSENT_REQUIRED`.
+- **1.2 Journey** — `journeys`/`journey_stage_events`, `JourneyStatus` enum, `POST/GET/PATCH /api/v1/me/journeys[/{id}]`. At most one non-CLOSED journey per user (partial unique index + app check). `gestationalWeek`/`trimester` computed per-response from the EDD, never persisted (`GestationalMath` utility, shared with Dashboard). **`User.stage`/`dueDate` are now frozen** — `UserProfileService` no longer writes them; Journey is the source of truth. A migration backfills a `Journey` per existing user who had a legacy `stage` on file (verified as a no-op on stage today — no such users exist there yet, but applies cleanly either way).
+- **1.3 Dashboard** — `care_protocol_steps` (seeded clinical content map, all `PENDING_CLINICAL_REVIEW` — **not yet clinically reviewed, don't present as approved**), `GET /api/v1/me/dashboard`. Implements "Workflow D" (late enrollment never shows earlier stages as missed) via a window-rank comparison over the journey's current stage/trimester.
+- **1.4** — lead/assessment/products/hospitals/checklists/nurse/doctor-session endpoints explicitly left alone, per the brief.
+
+Full request/response JSON for every endpoint above (including the 4 new error codes: `VALIDATION_FAILED`, `CONSENT_REQUIRED`, `CONSENT_VERSION_OUTDATED`, `JOURNEY_ALREADY_ACTIVE`) is in `UI_INTEGRATION_GUIDE.md` §7 — that's the contract to build a UI against, this section is just the "what and why."
+
+**Updated gaps, on top of §5:**
+- `CHILDCARE_0_7` journey status exists but has **no seeded `care_protocol_steps`** yet — a user who reaches that stage gets an empty `nextActions` (plus the universal clinical-psychologist offer). Not a bug, just unimplemented content — Phase 6 territory per the roadmap.
+- Clinical content (the stage → professional map) is all `PENDING_CLINICAL_REVIEW` — a real review workflow (who approves it, how `ReviewStatus` transitions to `APPROVED`) doesn't exist yet, just the enum value.
+- `LegacyAuthController`'s dev-only mock `/login` still writes `user.setStage()`/`setDueDate()` — left alone since it doesn't exist as a bean in prod/stage and isn't a real-world write path, but it's inconsistent with Journey now being the real source of truth if anyone resurrects it for local testing of stage-dependent features.
+- No Testcontainers — the brief flagged this as a future option if H2/Postgres drift becomes a real problem; hasn't been needed yet (H2 create-drop + the `DataInitializer` dual-seed pattern has kept pace through 7 migrations).
