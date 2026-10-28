@@ -2,7 +2,9 @@ package com.narturebelle.controller;
 
 import com.narturebelle.dto.MeProfileResponse;
 import com.narturebelle.dto.UpdateProfileRequest;
+import com.narturebelle.model.JourneyStatus;
 import com.narturebelle.model.User;
+import com.narturebelle.repository.JourneyRepository;
 import com.narturebelle.security.RequireVerified;
 import com.narturebelle.service.ConsentService;
 import com.narturebelle.service.UserProfileService;
@@ -20,17 +22,20 @@ public class MeController {
 
     private final UserProfileService userProfileService;
     private final ConsentService consentService;
+    private final JourneyRepository journeyRepository;
 
-    public MeController(UserProfileService userProfileService, ConsentService consentService) {
+    public MeController(UserProfileService userProfileService, ConsentService consentService,
+                         JourneyRepository journeyRepository) {
         this.userProfileService = userProfileService;
         this.consentService = consentService;
+        this.journeyRepository = journeyRepository;
     }
 
-    /** hasActiveJourney is a placeholder until Journey (1.2) ships. */
     @GetMapping
     public ResponseEntity<MeProfileResponse> getMe() {
         User user = userProfileService.loadSelfOrThrow();
-        return ResponseEntity.ok(MeProfileResponse.from(user, consentService.pendingConsentTypes(user.getId()), false));
+        return ResponseEntity.ok(MeProfileResponse.from(user, consentService.pendingConsentTypes(user.getId()),
+                hasActiveJourney(user.getId())));
     }
 
     @RequireVerified
@@ -38,6 +43,11 @@ public class MeController {
     public ResponseEntity<MeProfileResponse> updateMe(@Valid @RequestBody UpdateProfileRequest req) {
         User user = userProfileService.loadSelfOrThrow();
         User saved = userProfileService.applyProfileUpdate(user, req);
-        return ResponseEntity.ok(MeProfileResponse.from(saved, consentService.pendingConsentTypes(saved.getId()), false));
+        return ResponseEntity.ok(MeProfileResponse.from(saved, consentService.pendingConsentTypes(saved.getId()),
+                hasActiveJourney(saved.getId())));
+    }
+
+    private boolean hasActiveJourney(Long userId) {
+        return journeyRepository.existsByUserIdAndStatusNot(userId, JourneyStatus.CLOSED);
     }
 }

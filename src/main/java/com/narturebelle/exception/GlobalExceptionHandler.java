@@ -53,6 +53,21 @@ public class GlobalExceptionHandler {
                 .body(Map.of("code", "CONSENT_VERSION_OUTDATED", "message", e.getMessage()));
     }
 
+    @ExceptionHandler(JourneyAlreadyActiveException.class)
+    public ResponseEntity<Map<String, String>> handleJourneyAlreadyActive(JourneyAlreadyActiveException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(Map.of("code", "JOURNEY_ALREADY_ACTIVE", "message", e.getMessage()));
+    }
+
+    @ExceptionHandler(InvalidJourneyRequestException.class)
+    public ResponseEntity<Map<String, Object>> handleInvalidJourneyRequest(InvalidJourneyRequestException e) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("code", "VALIDATION_FAILED");
+        body.put("message", e.getMessage());
+        body.put("fields", Map.of(e.getField(), e.getMessage()));
+        return ResponseEntity.badRequest().body(body);
+    }
+
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<Map<String, Object>> handleMalformedBody(HttpMessageNotReadableException e) {
         Map<String, Object> body = new HashMap<>();

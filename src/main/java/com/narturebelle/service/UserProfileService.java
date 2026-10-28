@@ -3,7 +3,6 @@ package com.narturebelle.service;
 import com.narturebelle.dto.UpdateProfileRequest;
 import com.narturebelle.exception.PhoneInUseException;
 import com.narturebelle.exception.UserProfileNotFoundException;
-import com.narturebelle.model.PregnancyStage;
 import com.narturebelle.model.User;
 import com.narturebelle.repository.UserRepository;
 import com.narturebelle.security.AuthorizationService;
@@ -51,16 +50,9 @@ public class UserProfileService {
             }
             user.setPhone(newPhone);
         }
-        if (req.getStage() != null && !req.getStage().isBlank()) {
-            try {
-                user.setStage(PregnancyStage.valueOf(req.getStage().toUpperCase()));
-            } catch (IllegalArgumentException ignored) {
-                // keep existing stage if invalid value sent
-            }
-        }
-        if (req.getDueDate() != null) {
-            user.setDueDate(req.getDueDate());
-        }
+        // req.getStage()/getDueDate() are intentionally ignored: Journey (1.2) is now the source of
+        // truth for pregnancy stage/EDD. The fields stay on UpdateProfileRequest/User for one release
+        // so old UI calls don't break, but nothing writes to them any more.
 
         return userRepository.save(user);
     }
