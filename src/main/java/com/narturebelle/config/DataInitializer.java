@@ -6,6 +6,7 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
 
@@ -18,19 +19,22 @@ public class DataInitializer implements CommandLineRunner {
     private final NursePackageRepository nursePackageRepository;
     private final DoctorSessionRepository doctorSessionRepository;
     private final FeatureFlagRepository featureFlagRepository;
+    private final ConsentDocumentRepository consentDocumentRepository;
 
     public DataInitializer(ProductRepository productRepository,
                            ChecklistTaskRepository checklistTaskRepository,
                            HospitalPartnerRepository hospitalPartnerRepository,
                            NursePackageRepository nursePackageRepository,
                            DoctorSessionRepository doctorSessionRepository,
-                           FeatureFlagRepository featureFlagRepository) {
+                           FeatureFlagRepository featureFlagRepository,
+                           ConsentDocumentRepository consentDocumentRepository) {
         this.productRepository = productRepository;
         this.checklistTaskRepository = checklistTaskRepository;
         this.hospitalPartnerRepository = hospitalPartnerRepository;
         this.nursePackageRepository = nursePackageRepository;
         this.doctorSessionRepository = doctorSessionRepository;
         this.featureFlagRepository = featureFlagRepository;
+        this.consentDocumentRepository = consentDocumentRepository;
     }
 
     @Override
@@ -41,6 +45,7 @@ public class DataInitializer implements CommandLineRunner {
         seedNursePackages();
         seedDoctorSessions();
         seedFeatureFlags();
+        seedConsentDocuments();
     }
 
     /**
@@ -71,6 +76,30 @@ public class DataInitializer implements CommandLineRunner {
         flag.setEnabled(enabled);
         flag.setDescription(description);
         featureFlagRepository.save(flag);
+    }
+
+    /**
+     * Normally seeded by V5__consent.sql, but the test profile skips Flyway entirely (see
+     * seedFeatureFlags() above for the same pattern) — this keeps H2 in sync with that seed data.
+     */
+    private void seedConsentDocuments() {
+        if (consentDocumentRepository.count() > 0) return;
+
+        seedConsentDocument(ConsentDocumentType.TERMS, 1, "Terms of Service",
+                "# Terms of Service (DRAFT)\n\nThis is placeholder text pending legal review. Do not treat this as a final or binding document.");
+        seedConsentDocument(ConsentDocumentType.PRIVACY, 1, "Privacy Notice",
+                "# Privacy Notice (DRAFT)\n\nThis is placeholder text pending legal review. Do not treat this as a final or binding document.");
+    }
+
+    private void seedConsentDocument(ConsentDocumentType type, int version, String title, String bodyMarkdown) {
+        ConsentDocument doc = new ConsentDocument();
+        doc.setType(type);
+        doc.setVersion(version);
+        doc.setTitle(title);
+        doc.setBodyMarkdown(bodyMarkdown);
+        doc.setEffectiveAt(LocalDateTime.now());
+        doc.setActive(true);
+        consentDocumentRepository.save(doc);
     }
 
     private void seedProducts() {

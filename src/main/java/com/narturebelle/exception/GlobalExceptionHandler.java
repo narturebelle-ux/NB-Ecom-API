@@ -5,6 +5,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -36,6 +37,29 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, String>> handlePhoneInUse(PhoneInUseException e) {
         return ResponseEntity.badRequest()
                 .body(Map.of("code", "PHONE_IN_USE", "message", e.getMessage()));
+    }
+
+    @ExceptionHandler(ConsentRequiredException.class)
+    public ResponseEntity<Map<String, Object>> handleConsentRequired(ConsentRequiredException e) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("code", "CONSENT_REQUIRED");
+        body.put("pending", e.getPending());
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(body);
+    }
+
+    @ExceptionHandler(ConsentVersionOutdatedException.class)
+    public ResponseEntity<Map<String, String>> handleConsentVersionOutdated(ConsentVersionOutdatedException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(Map.of("code", "CONSENT_VERSION_OUTDATED", "message", e.getMessage()));
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<Map<String, Object>> handleMalformedBody(HttpMessageNotReadableException e) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("code", "VALIDATION_FAILED");
+        body.put("message", "Request body is missing or malformed.");
+        body.put("fields", Map.of());
+        return ResponseEntity.badRequest().body(body);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
