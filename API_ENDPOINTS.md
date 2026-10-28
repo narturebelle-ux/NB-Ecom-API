@@ -1,5 +1,7 @@
 # API Endpoints & Access Levels
 
+**Interactive docs:** run the app and open `http://localhost:<PORT>/swagger-ui/index.html` (publicly reachable, no token needed just to view it). Click **Authorize** and paste a Firebase ID token to test endpoints that require login directly from the UI. Raw OpenAPI JSON is at `/v3/api-docs`.
+
 Access tiers, per the AUTH CONTRACT between UI and API:
 
 - **Public** — no `Authorization` header needed.

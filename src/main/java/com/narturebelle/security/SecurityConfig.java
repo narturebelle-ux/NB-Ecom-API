@@ -47,7 +47,10 @@ public class SecurityConfig {
                                 "/api/v1/features",
                                 "/api/v1/doctor-sessions/**",
                                 "/api/v1/nurse-companion/**",
-                                "/api/v1/leads/**"
+                                "/api/v1/leads/**",
+                                "/swagger-ui.html",
+                                "/swagger-ui/**",
+                                "/v3/api-docs/**"
                         ).permitAll()
                         // Dev-only legacy endpoints (bean only exists outside prod/stage; still explicit here).
                         .requestMatchers("/api/v1/auth/send-otp", "/api/v1/auth/login").permitAll()
