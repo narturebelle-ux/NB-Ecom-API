@@ -19,7 +19,9 @@ replay_pid*
 
 # Credentials & Service Accounts
 *firebase-service-account*.json
-*.env
+.env
+.env.*
+!.env*.example
 
 # IDEs
 .idea/
