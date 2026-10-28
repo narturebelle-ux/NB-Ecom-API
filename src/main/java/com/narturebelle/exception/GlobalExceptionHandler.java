@@ -26,6 +26,18 @@ public class GlobalExceptionHandler {
                 .body(Map.of("code", "EMAIL_NOT_VERIFIED", "message", e.getMessage()));
     }
 
+    @ExceptionHandler(UserProfileNotFoundException.class)
+    public ResponseEntity<Map<String, String>> handleUserProfileNotFound(UserProfileNotFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(Map.of("code", "USER_NOT_FOUND", "message", e.getMessage()));
+    }
+
+    @ExceptionHandler(PhoneInUseException.class)
+    public ResponseEntity<Map<String, String>> handlePhoneInUse(PhoneInUseException e) {
+        return ResponseEntity.badRequest()
+                .body(Map.of("code", "PHONE_IN_USE", "message", e.getMessage()));
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<Map<String, Object>> handleValidation(MethodArgumentNotValidException e) {
         Map<String, String> fields = new HashMap<>();
