@@ -10,6 +10,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.Arrays;
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/v1/auth")
 public class AuthController {
@@ -35,6 +38,9 @@ public class AuthController {
             User newUser = new User();
             newUser.setFirebaseUid(principal.firebaseUid());
             newUser.setRole("USER");
+            String[] derivedName = deriveName(principal);
+            newUser.setFirstName(derivedName[0]);
+            newUser.setLastName(derivedName[1]);
             return newUser;
         });
 
@@ -47,5 +53,35 @@ public class AuthController {
 
         User saved = userRepository.save(user);
         return ResponseEntity.ok(UserProfileResponse.from(saved));
+    }
+
+    /**
+     * Only called when creating a brand-new user — never on later logins, so a user's manual edits
+     * via PUT /users/me are never clobbered. Google sign-in gives a real display name; everything
+     * else falls back to guessing from the email's local-part; phone-only has nothing to derive from.
+     */
+    private static String[] deriveName(FirebaseUserPrincipal principal) {
+        if (principal.name() != null && !principal.name().isBlank()) {
+            String[] parts = principal.name().trim().split("\\s+", 2);
+            return new String[]{parts[0], parts.length > 1 ? parts[1] : ""};
+        }
+        if (principal.email() != null && !principal.email().isBlank()) {
+            String localPart = principal.email().split("@", 2)[0];
+            List<String> segments = Arrays.stream(localPart.split("[._\\-0-9]+"))
+                    .filter(s -> !s.isBlank())
+                    .map(AuthController::titleCase)
+                    .toList();
+            if (segments.isEmpty()) {
+                return new String[]{null, null};
+            }
+            String first = segments.get(0);
+            String last = segments.size() > 1 ? String.join(" ", segments.subList(1, segments.size())) : "";
+            return new String[]{first, last};
+        }
+        return new String[]{null, null};
+    }
+
+    private static String titleCase(String s) {
+        return Character.toUpperCase(s.charAt(0)) + s.substring(1).toLowerCase();
     }
 }
