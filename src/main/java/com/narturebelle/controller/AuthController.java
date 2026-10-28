@@ -4,6 +4,7 @@ import com.narturebelle.dto.UserProfileResponse;
 import com.narturebelle.model.Role;
 import com.narturebelle.model.User;
 import com.narturebelle.repository.UserRepository;
+import com.narturebelle.security.AuditService;
 import com.narturebelle.security.AuthorizationService;
 import com.narturebelle.security.FirebaseUserPrincipal;
 import org.springframework.http.ResponseEntity;
@@ -13,6 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 @RestController
@@ -21,10 +23,13 @@ public class AuthController {
 
     private final UserRepository userRepository;
     private final AuthorizationService authorizationService;
+    private final AuditService auditService;
 
-    public AuthController(UserRepository userRepository, AuthorizationService authorizationService) {
+    public AuthController(UserRepository userRepository, AuthorizationService authorizationService,
+                           AuditService auditService) {
         this.userRepository = userRepository;
         this.authorizationService = authorizationService;
+        this.auditService = auditService;
     }
 
     /**
@@ -36,7 +41,9 @@ public class AuthController {
     public ResponseEntity<UserProfileResponse> syncFirebaseUser() {
         FirebaseUserPrincipal principal = authorizationService.currentPrincipal();
 
-        User user = userRepository.findByFirebaseUid(principal.firebaseUid()).orElseGet(() -> {
+        Optional<User> existing = userRepository.findByFirebaseUid(principal.firebaseUid());
+        boolean isNewUser = existing.isEmpty();
+        User user = existing.orElseGet(() -> {
             User newUser = new User();
             newUser.setFirebaseUid(principal.firebaseUid());
             newUser.setRoles(Set.of(Role.MOTHER));
@@ -54,6 +61,9 @@ public class AuthController {
         }
 
         User saved = userRepository.save(user);
+        if (isNewUser) {
+            auditService.record("USER_CREATED", "User", String.valueOf(saved.getId()), null);
+        }
         return ResponseEntity.ok(UserProfileResponse.from(saved));
     }
 
