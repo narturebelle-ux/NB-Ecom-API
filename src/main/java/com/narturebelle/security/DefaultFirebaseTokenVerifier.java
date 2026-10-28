@@ -32,7 +32,7 @@ public class DefaultFirebaseTokenVerifier implements FirebaseTokenVerifier {
         if (claim instanceof String s && !s.isBlank()) {
             phone = s;
         }
-        return new VerifiedFirebaseToken(decoded.getUid(), decoded.getEmail(), decoded.isEmailVerified(), phone);
+        return new VerifiedFirebaseToken(decoded.getUid(), decoded.getEmail(), decoded.isEmailVerified(), phone, decoded.getName());
     }
 
     private VerifiedFirebaseToken devBypass() {
@@ -43,6 +43,6 @@ public class DefaultFirebaseTokenVerifier implements FirebaseTokenVerifier {
         }
         log.warn(">>> DEV BYPASS: Firebase Admin SDK is not configured. Treating this request as a fake, " +
                 "pre-verified dev user. This must never happen in prod/stage.");
-        return new VerifiedFirebaseToken("dev-bypass-uid", "dev@localhost", true, null);
+        return new VerifiedFirebaseToken("dev-bypass-uid", "dev@localhost", true, null, null);
     }
 }

@@ -65,7 +65,7 @@ public class FirebaseAuthenticationFilter extends OncePerRequestFilter {
 
             FirebaseUserPrincipal principal = new FirebaseUserPrincipal(
                     userId, verified.uid(), verified.email(), verified.emailVerified(),
-                    verified.phone(), verified.phone() != null, role
+                    verified.phone(), verified.phone() != null, role, verified.name()
             );
 
             List<GrantedAuthority> authorities = new ArrayList<>();

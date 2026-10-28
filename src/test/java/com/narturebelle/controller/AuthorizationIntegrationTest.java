@@ -71,11 +71,11 @@ class AuthorizationIntegrationTest {
         userRepository.save(admin);
 
         when(firebaseTokenVerifier.verify(USER_A_TOKEN))
-                .thenReturn(new VerifiedFirebaseToken("uid-a", "a@example.com", true, null));
+                .thenReturn(new VerifiedFirebaseToken("uid-a", "a@example.com", true, null, null));
         when(firebaseTokenVerifier.verify(UNVERIFIED_TOKEN))
-                .thenReturn(new VerifiedFirebaseToken("uid-a", "a@example.com", false, null));
+                .thenReturn(new VerifiedFirebaseToken("uid-a", "a@example.com", false, null, null));
         when(firebaseTokenVerifier.verify(ADMIN_TOKEN))
-                .thenReturn(new VerifiedFirebaseToken("uid-admin", "admin@example.com", true, null));
+                .thenReturn(new VerifiedFirebaseToken("uid-admin", "admin@example.com", true, null, null));
     }
 
     @Test

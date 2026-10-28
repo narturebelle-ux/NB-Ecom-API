@@ -11,7 +11,8 @@ public record FirebaseUserPrincipal(
         boolean emailVerified,
         String phone,
         boolean phoneVerified,
-        String role
+        String role,
+        String name
 ) {
     public boolean isVerified() {
         return emailVerified || phone != null;
