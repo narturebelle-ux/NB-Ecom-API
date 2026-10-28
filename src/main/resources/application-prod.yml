@@ -8,7 +8,7 @@
 spring:
   jpa:
     hibernate:
-      ddl-auto: validate # Never auto-create/update schema in production
+      ddl-auto: validate # Never auto-create/update schema in production — Flyway owns it
     show-sql: false
 
 features:

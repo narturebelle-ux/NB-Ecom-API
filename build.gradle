@@ -30,6 +30,10 @@ dependencies {
     // OpenAPI / Swagger UI
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.6.0'
 
+    // Flyway — schema migrations (non-test profiles only; test stays on H2 create-drop)
+    implementation 'org.flywaydb:flyway-core'
+    implementation 'org.flywaydb:flyway-database-postgresql'
+
     // Dev-only hot restart/LiveReload — excluded from the built jar (bootJar) automatically.
     developmentOnly 'org.springframework.boot:spring-boot-devtools'
 
@@ -45,4 +49,6 @@ dependencies {
 
 tasks.named('test') {
     useJUnitPlatform()
+    maxHeapSize = "512m"
+    minHeapSize = "128m"
 }

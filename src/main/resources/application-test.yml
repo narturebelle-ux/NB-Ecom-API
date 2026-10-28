@@ -17,6 +17,10 @@ spring:
     hibernate:
       ddl-auto: create-drop
     show-sql: true
+  # Flyway targets Postgres-specific SQL; tests stay on H2 create-drop instead (see HANDOFF.md).
+  # If H2/Postgres schema drift becomes a real problem, switch to Testcontainers Postgres.
+  flyway:
+    enabled: false
 
 features:
   nurse-companion: true

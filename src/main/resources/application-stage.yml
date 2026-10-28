@@ -8,7 +8,7 @@
 spring:
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate # Flyway owns schema changes now — see application.yml
     show-sql: false
 
 features:
