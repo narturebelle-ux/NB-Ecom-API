@@ -20,6 +20,7 @@ public class DataInitializer implements CommandLineRunner {
     private final DoctorSessionRepository doctorSessionRepository;
     private final FeatureFlagRepository featureFlagRepository;
     private final ConsentDocumentRepository consentDocumentRepository;
+    private final CareProtocolStepRepository careProtocolStepRepository;
 
     public DataInitializer(ProductRepository productRepository,
                            ChecklistTaskRepository checklistTaskRepository,
@@ -27,7 +28,8 @@ public class DataInitializer implements CommandLineRunner {
                            NursePackageRepository nursePackageRepository,
                            DoctorSessionRepository doctorSessionRepository,
                            FeatureFlagRepository featureFlagRepository,
-                           ConsentDocumentRepository consentDocumentRepository) {
+                           ConsentDocumentRepository consentDocumentRepository,
+                           CareProtocolStepRepository careProtocolStepRepository) {
         this.productRepository = productRepository;
         this.checklistTaskRepository = checklistTaskRepository;
         this.hospitalPartnerRepository = hospitalPartnerRepository;
@@ -35,6 +37,7 @@ public class DataInitializer implements CommandLineRunner {
         this.doctorSessionRepository = doctorSessionRepository;
         this.featureFlagRepository = featureFlagRepository;
         this.consentDocumentRepository = consentDocumentRepository;
+        this.careProtocolStepRepository = careProtocolStepRepository;
     }
 
     @Override
@@ -46,6 +49,7 @@ public class DataInitializer implements CommandLineRunner {
         seedDoctorSessions();
         seedFeatureFlags();
         seedConsentDocuments();
+        seedCareProtocolSteps();
     }
 
     /**
@@ -89,6 +93,62 @@ public class DataInitializer implements CommandLineRunner {
                 "# Terms of Service (DRAFT)\n\nThis is placeholder text pending legal review. Do not treat this as a final or binding document.");
         seedConsentDocument(ConsentDocumentType.PRIVACY, 1, "Privacy Notice",
                 "# Privacy Notice (DRAFT)\n\nThis is placeholder text pending legal review. Do not treat this as a final or binding document.");
+    }
+
+    /**
+     * Normally seeded by V7__care_protocol_steps.sql, but the test profile skips Flyway entirely
+     * (see seedFeatureFlags() above for the same pattern) — this keeps H2 in sync with that seed data.
+     */
+    private void seedCareProtocolSteps() {
+        if (careProtocolStepRepository.count() > 0) return;
+
+        seedCareStep(JourneyStatus.PREGNANCY, 1, Role.GYNECOLOGIST, "See your Gynecologist",
+                "Routine first-trimester prenatal check-up.", 10, false);
+        seedCareStep(JourneyStatus.PREGNANCY, 2, Role.GYNECOLOGIST, "See your Gynecologist",
+                "Routine second-trimester prenatal check-up.", 10, false);
+        seedCareStep(JourneyStatus.PREGNANCY, 2, Role.NUTRITIONIST, "Meet your Nutritionist",
+                "Second-trimester nutrition planning.", 20, false);
+        seedCareStep(JourneyStatus.PREGNANCY, 3, Role.GYNECOLOGIST, "See your Gynecologist",
+                "Routine third-trimester prenatal check-up.", 10, false);
+        seedCareStep(JourneyStatus.PREGNANCY, 3, Role.NUTRITIONIST, "Meet your Nutritionist",
+                "Third-trimester nutrition planning.", 20, false);
+        seedCareStep(JourneyStatus.PRE_DELIVERY, null, Role.GYNECOLOGIST, "See your Gynecologist",
+                "Pre-delivery check-up and birth planning.", 10, false);
+        seedCareStep(JourneyStatus.PRE_DELIVERY, null, Role.LACTATION_CONSULTANT, "Meet your Lactation consultant",
+                "Prepare for breastfeeding before delivery.", 20, false);
+        seedCareStep(JourneyStatus.DELIVERY_COMPLETED, null, Role.GYNECOLOGIST, "See your Gynecologist",
+                "Postnatal check-up.", 10, false);
+        seedCareStep(JourneyStatus.DELIVERY_COMPLETED, null, Role.PEDIATRICIAN, "Meet your Pediatrician",
+                "Newborn care check-up.", 20, false);
+        seedCareStep(JourneyStatus.DELIVERY_COMPLETED, null, Role.LACTATION_CONSULTANT, "Meet your Lactation consultant",
+                "Breastfeeding support after delivery.", 30, false);
+        seedCareStep(JourneyStatus.DELIVERY_COMPLETED, null, Role.POSTPARTUM_PHYSIOTHERAPIST, "Meet your Postpartum physiotherapist",
+                "Postpartum recovery support.", 40, false);
+        seedCareStep(JourneyStatus.POSTPARTUM, null, Role.GYNECOLOGIST, "See your Gynecologist",
+                "Postpartum follow-up check-up.", 10, false);
+        seedCareStep(JourneyStatus.POSTPARTUM, null, Role.PEDIATRICIAN, "Meet your Pediatrician",
+                "Ongoing newborn care check-ups.", 20, false);
+        seedCareStep(JourneyStatus.POSTPARTUM, null, Role.LACTATION_CONSULTANT, "Meet your Lactation consultant",
+                "Ongoing breastfeeding support.", 30, false);
+        seedCareStep(JourneyStatus.POSTPARTUM, null, Role.POSTPARTUM_PHYSIOTHERAPIST, "Meet your Postpartum physiotherapist",
+                "Ongoing postpartum recovery support.", 40, false);
+        seedCareStep(null, null, Role.CLINICAL_PSYCHOLOGIST, "Clinical psychologist support",
+                "Available if you'd like support - entirely optional, never required.", 100, true);
+    }
+
+    private void seedCareStep(JourneyStatus journeyStatus, Integer trimester, Role professionalType, String title,
+                               String description, int sortOrder, boolean optional) {
+        CareProtocolStep step = new CareProtocolStep();
+        step.setVersion(1);
+        step.setReviewStatus(ReviewStatus.PENDING_CLINICAL_REVIEW);
+        step.setJourneyStatus(journeyStatus);
+        step.setTrimester(trimester);
+        step.setProfessionalType(professionalType);
+        step.setTitle(title);
+        step.setDescription(description);
+        step.setSortOrder(sortOrder);
+        step.setOptional(optional);
+        careProtocolStepRepository.save(step);
     }
 
     private void seedConsentDocument(ConsentDocumentType type, int version, String title, String bodyMarkdown) {

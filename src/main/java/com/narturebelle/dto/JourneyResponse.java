@@ -2,10 +2,10 @@ package com.narturebelle.dto;
 
 import com.narturebelle.model.Journey;
 import com.narturebelle.model.JourneyStatus;
+import com.narturebelle.service.GestationalMath;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.temporal.ChronoUnit;
 
 /**
  * gestationalWeek/trimester are computed, never persisted — only meaningful for an active
@@ -30,15 +30,8 @@ public class JourneyResponse {
         dto.startedAt = journey.getStartedAt();
         dto.closedAt = journey.getClosedAt();
 
-        if (journey.getStatus() == JourneyStatus.PREGNANCY && journey.getExpectedDeliveryDate() != null) {
-            LocalDate day0 = journey.getExpectedDeliveryDate().minusDays(280);
-            long daysSinceDay0 = ChronoUnit.DAYS.between(day0, LocalDate.now());
-            int week = (int) Math.floorDiv(daysSinceDay0, 7) + 1;
-            dto.gestationalWeek = week;
-            if (week >= 1) {
-                dto.trimester = week <= 13 ? 1 : week <= 27 ? 2 : 3;
-            }
-        }
+        dto.gestationalWeek = GestationalMath.gestationalWeek(journey.getStatus(), journey.getExpectedDeliveryDate());
+        dto.trimester = GestationalMath.trimester(journey.getStatus(), journey.getExpectedDeliveryDate());
 
         return dto;
     }
