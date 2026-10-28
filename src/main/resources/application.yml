@@ -26,13 +26,13 @@ spring:
 server:
   port: ${PORT:8085}
 
-# CORS — comma-separated list, e.g. "https://narturebelle.com,https://www.narturebelle.com".
-# Defaults to "*" for local dev/test; stage/prod override via CORS_ALLOWED_ORIGINS.
+# CORS — set here once for every environment/profile (no per-profile override).
 cors:
-  allowed-origins: ${CORS_ALLOWED_ORIGINS:*}
+  allowed-origins: "https://narturebelle.com,https://www.narturebelle.com,https://stage-narturebelle.com,http://localhost:*"
 
-# Firebase Credentials Path
+# Firebase Credentials — tried in order: base64 env var, then local file, then ADC.
 firebase:
+  service-account-base64: ${FIREBASE_SERVICE_ACCOUNT_BASE64:}
   credentials:
     path: classpath:firebase-service-account.json
 
