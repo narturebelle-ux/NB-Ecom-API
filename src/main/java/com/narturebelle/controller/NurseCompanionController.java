@@ -5,6 +5,7 @@ import com.narturebelle.model.NurseBooking;
 import com.narturebelle.model.NursePackage;
 import com.narturebelle.repository.NurseBookingRepository;
 import com.narturebelle.repository.NursePackageRepository;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -31,7 +32,7 @@ public class NurseCompanionController {
     }
 
     @PostMapping("/book")
-    public ResponseEntity<Map<String, Object>> bookNurseCompanion(@RequestBody NurseBookingRequest request) {
+    public ResponseEntity<Map<String, Object>> bookNurseCompanion(@Valid @RequestBody NurseBookingRequest request) {
         NurseBooking booking = new NurseBooking();
         booking.setClientName(request.getClientName());
         booking.setClientPhone(request.getClientPhone());

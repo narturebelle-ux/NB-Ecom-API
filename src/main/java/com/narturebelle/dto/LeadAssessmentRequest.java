@@ -1,12 +1,18 @@
 package com.narturebelle.dto;
 
 import com.narturebelle.model.PregnancyStage;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
 import java.time.LocalDate;
 import java.util.List;
 
 public class LeadAssessmentRequest {
     private String name;
+
+    @Email
     private String email;
+
+    @NotBlank
     private String phone;
     private PregnancyStage stage;
     private LocalDate dueDate;

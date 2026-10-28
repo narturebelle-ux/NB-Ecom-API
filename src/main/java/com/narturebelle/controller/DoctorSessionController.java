@@ -5,6 +5,7 @@ import com.narturebelle.model.DoctorRsvp;
 import com.narturebelle.model.DoctorSession;
 import com.narturebelle.repository.DoctorRsvpRepository;
 import com.narturebelle.repository.DoctorSessionRepository;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -31,7 +32,7 @@ public class DoctorSessionController {
     }
 
     @PostMapping("/rsvp")
-    public ResponseEntity<Map<String, Object>> rsvpSession(@RequestBody DoctorRsvpRequest request) {
+    public ResponseEntity<Map<String, Object>> rsvpSession(@Valid @RequestBody DoctorRsvpRequest request) {
         DoctorRsvp rsvp = new DoctorRsvp();
         rsvp.setSessionId(request.getSessionId());
         rsvp.setMotherName(request.getMotherName());

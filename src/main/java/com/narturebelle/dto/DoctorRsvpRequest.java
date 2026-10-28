@@ -1,11 +1,19 @@
 package com.narturebelle.dto;
 
 import com.narturebelle.model.PregnancyStage;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
 
 public class DoctorRsvpRequest {
     private Long sessionId;
+
+    @NotBlank
     private String motherName;
+
+    @NotBlank
     private String phone;
+
+    @Email
     private String email;
     private PregnancyStage stage;
     private String userQuestion;

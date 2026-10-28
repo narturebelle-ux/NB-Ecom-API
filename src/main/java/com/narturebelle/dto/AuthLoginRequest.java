@@ -1,10 +1,13 @@
 package com.narturebelle.dto;
 
 import com.narturebelle.model.PregnancyStage;
+import jakarta.validation.constraints.Email;
 import java.time.LocalDate;
 
 public class AuthLoginRequest {
     private String provider; // "GOOGLE", "PHONE", "EMAIL"
+
+    @Email
     private String email;
     private String phone;
     private String name;

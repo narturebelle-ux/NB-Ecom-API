@@ -8,6 +8,7 @@ import com.narturebelle.repository.UserRepository;
 import com.narturebelle.security.AuthorizationService;
 import com.narturebelle.security.FirebaseUserPrincipal;
 import com.narturebelle.security.RequireVerified;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -39,7 +40,7 @@ public class UserController {
     /** PUT /api/v1/users/me — update the logged-in user's own profile. Requires a verified user. */
     @RequireVerified
     @PutMapping("/me")
-    public ResponseEntity<?> updateMyProfile(@RequestBody UpdateProfileRequest req) {
+    public ResponseEntity<?> updateMyProfile(@Valid @RequestBody UpdateProfileRequest req) {
         User user = loadSelfOrNotFound();
         if (user == null) {
             return profileNotCreatedYet();
