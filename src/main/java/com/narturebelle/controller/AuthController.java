@@ -1,6 +1,7 @@
 package com.narturebelle.controller;
 
 import com.narturebelle.dto.UserProfileResponse;
+import com.narturebelle.model.Role;
 import com.narturebelle.model.User;
 import com.narturebelle.repository.UserRepository;
 import com.narturebelle.security.AuthorizationService;
@@ -12,6 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
 
 @RestController
 @RequestMapping("/api/v1/auth")
@@ -37,7 +39,7 @@ public class AuthController {
         User user = userRepository.findByFirebaseUid(principal.firebaseUid()).orElseGet(() -> {
             User newUser = new User();
             newUser.setFirebaseUid(principal.firebaseUid());
-            newUser.setRole("USER");
+            newUser.setRoles(Set.of(Role.MOTHER));
             String[] derivedName = deriveName(principal);
             newUser.setFirstName(derivedName[0]);
             newUser.setLastName(derivedName[1]);

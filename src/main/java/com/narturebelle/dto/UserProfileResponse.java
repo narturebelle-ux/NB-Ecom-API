@@ -1,9 +1,12 @@
 package com.narturebelle.dto;
 
 import com.narturebelle.model.PregnancyStage;
+import com.narturebelle.model.Role;
 import com.narturebelle.model.User;
 
 import java.time.LocalDate;
+import java.util.Comparator;
+import java.util.List;
 
 /** Response shape for /api/v1/auth/firebase and /api/v1/users/** per the AUTH CONTRACT. */
 public class UserProfileResponse {
@@ -18,7 +21,10 @@ public class UserProfileResponse {
     private String lastName;
     private PregnancyStage stage;
     private LocalDate dueDate;
+    /** @deprecated kept for one release so older UI code doesn't break — use {@link #roles}. */
+    @Deprecated
     private String role;
+    private List<String> roles;
 
     public static UserProfileResponse from(User user) {
         UserProfileResponse dto = new UserProfileResponse();
@@ -32,7 +38,13 @@ public class UserProfileResponse {
         dto.lastName = user.getLastName();
         dto.stage = user.getStage();
         dto.dueDate = user.getDueDate();
-        dto.role = user.getRole();
+        dto.roles = user.getRoles().stream().map(Role::name).sorted().toList();
+        // "Primary" role for backward compat: alphabetically first of the new roles, falling back
+        // to the legacy column only if a row somehow has no roles at all.
+        dto.role = user.getRoles().stream()
+                .min(Comparator.comparing(Enum::name))
+                .map(Role::name)
+                .orElse(user.getRole());
         return dto;
     }
 
@@ -46,5 +58,7 @@ public class UserProfileResponse {
     public String getLastName() { return lastName; }
     public PregnancyStage getStage() { return stage; }
     public LocalDate getDueDate() { return dueDate; }
+    @Deprecated
     public String getRole() { return role; }
+    public List<String> getRoles() { return roles; }
 }
