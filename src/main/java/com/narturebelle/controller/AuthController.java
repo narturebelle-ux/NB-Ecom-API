@@ -47,11 +47,16 @@ public class AuthController {
             User newUser = new User();
             newUser.setFirebaseUid(principal.firebaseUid());
             newUser.setRoles(Set.of(Role.MOTHER));
-            String[] derivedName = deriveName(principal);
-            newUser.setFirstName(derivedName[0]);
-            newUser.setLastName(derivedName[1]);
             return newUser;
         });
+
+        // Covers both brand-new users and legacy existing ones with no name on file (0.7 backfill).
+        // Never touches a user who already has a name - manual edits via PUT/PATCH /me are safe.
+        if (isBlank(user.getFirstName()) && isBlank(user.getLastName())) {
+            String[] derivedName = deriveName(principal);
+            user.setFirstName(derivedName[0]);
+            user.setLastName(derivedName[1]);
+        }
 
         user.setEmail(principal.email());
         user.setEmailVerified(principal.emailVerified());
@@ -95,5 +100,9 @@ public class AuthController {
 
     private static String titleCase(String s) {
         return Character.toUpperCase(s.charAt(0)) + s.substring(1).toLowerCase();
+    }
+
+    private static boolean isBlank(String s) {
+        return s == null || s.isBlank();
     }
 }
