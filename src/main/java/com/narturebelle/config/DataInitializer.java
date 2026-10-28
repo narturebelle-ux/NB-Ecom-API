@@ -17,17 +17,20 @@ public class DataInitializer implements CommandLineRunner {
     private final HospitalPartnerRepository hospitalPartnerRepository;
     private final NursePackageRepository nursePackageRepository;
     private final DoctorSessionRepository doctorSessionRepository;
+    private final FeatureFlagRepository featureFlagRepository;
 
     public DataInitializer(ProductRepository productRepository,
                            ChecklistTaskRepository checklistTaskRepository,
                            HospitalPartnerRepository hospitalPartnerRepository,
                            NursePackageRepository nursePackageRepository,
-                           DoctorSessionRepository doctorSessionRepository) {
+                           DoctorSessionRepository doctorSessionRepository,
+                           FeatureFlagRepository featureFlagRepository) {
         this.productRepository = productRepository;
         this.checklistTaskRepository = checklistTaskRepository;
         this.hospitalPartnerRepository = hospitalPartnerRepository;
         this.nursePackageRepository = nursePackageRepository;
         this.doctorSessionRepository = doctorSessionRepository;
+        this.featureFlagRepository = featureFlagRepository;
     }
 
     @Override
@@ -37,6 +40,37 @@ public class DataInitializer implements CommandLineRunner {
         seedHospitalPartners();
         seedNursePackages();
         seedDoctorSessions();
+        seedFeatureFlags();
+    }
+
+    /**
+     * Normally seeded by V4__feature_flags.sql, but the test profile skips Flyway entirely (H2
+     * create-drop instead), so this covers that path too — harmless no-op elsewhere since the
+     * count() > 0 guard skips it once Flyway has already seeded the real databases.
+     */
+    private void seedFeatureFlags() {
+        if (featureFlagRepository.count() > 0) return;
+
+        seedFlag("nurseCompanion", true, "Maa Sakhi nurse care plan & on-call triage");
+        seedFlag("hospitalLeads", true, "Local maternity hospital directory & tour bookings");
+        seedFlag("doctorLiveSessions", true, "OB-GYN interactive live streams & RSVP");
+        seedFlag("assessmentVoucher", true, "Instant discount voucher on diagnostic completion");
+        seedFlag("babyCareProducts", false, "Future expansion (0-5 years) - hidden by default");
+        seedFlag("productRecommendations", false, "Product store pages (Phase 6)");
+        seedFlag("careBooking", false, "Provider booking & sessions (Phase 3)");
+        seedFlag("recordsVault", false, "Health records vault & sharing (Phase 4)");
+        seedFlag("childTracker", false, "Child profile + vaccination tracker (Phase 6)");
+        seedFlag("aiAssistant", false, "AI record plan (Phase 6) - needs clinical governance first");
+        seedFlag("joyCircle", false, "Non-clinical group events (Phase 6)");
+        seedFlag("legacyLeadForms", false, "Old public lead/assessment forms");
+    }
+
+    private void seedFlag(String key, boolean enabled, String description) {
+        FeatureFlag flag = new FeatureFlag();
+        flag.setKey(key);
+        flag.setEnabled(enabled);
+        flag.setDescription(description);
+        featureFlagRepository.save(flag);
     }
 
     private void seedProducts() {

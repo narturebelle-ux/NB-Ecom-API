@@ -43,15 +43,8 @@ firebase:
   credentials:
     path: classpath:firebase-service-account.json
 
-# =========================================================================
-# FEATURE TOGGLES (Free & Open Source - Governed by Spring Boot Profiles)
-# =========================================================================
-features:
-  nurse-companion: true        # Stream 3: 'Maa Sakhi' Nurse Care plan & on-call triage
-  hospital-leads: true         # Stream 2: Local maternity hospital directory & tour bookings
-  doctor-live-sessions: true   # OB-GYN interactive live streams & RSVP
-  assessment-voucher: true     # Instant ₹100 NARTURE10 discount voucher on diagnostic completion
-  baby-care-products: false    # Future expansion (0-5 years) - hidden by default
+# Feature flags live in the feature_flags DB table now (see V4__feature_flags.sql and
+# AdminFeatureFlagController) — not here. GET /api/v1/features reads the table directly.
 
 # Logging Configuration
 logging:
