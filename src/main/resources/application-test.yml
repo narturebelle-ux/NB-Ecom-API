@@ -29,6 +29,10 @@ supabase:
   url: http://localhost:9999
   service-role-key: test-service-role-key
 
+narturebelle:
+  scheduling:
+    enabled: false
+
 features:
   nurse-companion: true
   hospital-leads: true

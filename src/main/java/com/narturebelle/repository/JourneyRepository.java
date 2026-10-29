@@ -14,4 +14,6 @@ public interface JourneyRepository extends JpaRepository<Journey, Long> {
     Optional<Journey> findByUserIdAndStatusNot(Long userId, JourneyStatus status);
 
     boolean existsByUserIdAndStatusNot(Long userId, JourneyStatus status);
+
+    List<Journey> findByStatusNot(JourneyStatus status);
 }

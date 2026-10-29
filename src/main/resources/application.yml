@@ -70,6 +70,12 @@ records:
   share:
     max-expiry-days: ${RECORDS_SHARE_MAX_EXPIRY_DAYS:180}
 
+narturebelle:
+  scheduling:
+    # Off in the test profile (see application-test.yml) -- a @Scheduled job firing mid-test would
+    # mutate data a test didn't create. Real default is on.
+    enabled: ${SCHEDULING_ENABLED:true}
+
 # Logging Configuration
 logging:
   level:
