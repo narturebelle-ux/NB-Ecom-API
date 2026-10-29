@@ -84,8 +84,8 @@ public class DataInitializer implements CommandLineRunner {
         seedFlag("assessmentVoucher", true, "Instant discount voucher on diagnostic completion");
         seedFlag("babyCareProducts", false, "Future expansion (0-5 years) - hidden by default");
         seedFlag("productRecommendations", false, "Product store pages (Phase 6)");
-        seedFlag("careBooking", false, "Provider booking & sessions (Phase 3)");
-        seedFlag("recordsVault", false, "Health records vault & sharing (Phase 4)");
+        seedFlag("careBooking", true, "Provider booking & sessions (Phase 3) - shipped 2026-10-29");
+        seedFlag("recordsVault", true, "Health records vault & sharing (Phase 4) - shipped 2026-10-29");
         seedFlag("childTracker", false, "Child profile + vaccination tracker (Phase 6)");
         seedFlag("aiAssistant", false, "AI record plan (Phase 6) - needs clinical governance first");
         seedFlag("joyCircle", false, "Non-clinical group events (Phase 6)");
