@@ -475,11 +475,12 @@ GET /api/v1/me/onboarding
     "city": "Bengaluru", "language": "English", "preferredModality": "VIRTUAL",
     "phone": "9999999999", "notes": "...", "createdAt": "...", "updatedAt": "..." } | null,
   "call": { "id": 1, "slotId": 7, "scheduledStart": "...", "scheduledEnd": "...", "createdAt": "..." } | null,
+  "callbackRequestedAt": "2026-10-29T12:00:00" | null,
   "documentsSigned": false,
   "completedAt": null
 }
 ```
-`documentsSigned` and `completedAt` are **always `false`/`null` for now** — not a bug, Part B hasn't shipped. `riskFactors` is one of `HIGH_BLOOD_PRESSURE, DIABETES, THYROID, PREVIOUS_C_SECTION, PREVIOUS_COMPLICATIONS`; `preferredModality` reuses the existing `Modality` enum (`VIRTUAL`/`PHYSICAL`) from Phase 3. `supportWanted` is free-form strings, not a closed enum on this side — send whatever the UI's own option set is.
+`documentsSigned` and `completedAt` are **always `false`/`null` for now** — not a bug, Part B hasn't shipped. `callbackRequestedAt` reflects the caller's most recent `POST /me/onboarding/callback-request`, if any — added so the UI doesn't have to track that locally. `riskFactors` is one of `HIGH_BLOOD_PRESSURE, DIABETES, THYROID, PREVIOUS_C_SECTION, PREVIOUS_COMPLICATIONS`; `preferredModality` reuses the existing `Modality` enum (`VIRTUAL`/`PHYSICAL`) from Phase 3. `supportWanted` is free-form strings, not a closed enum on this side — send whatever the UI's own option set is.
 
 **Intake — upsert, `Logged in`:**
 ```
