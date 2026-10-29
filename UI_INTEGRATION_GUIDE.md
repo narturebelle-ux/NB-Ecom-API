@@ -217,5 +217,94 @@ GET /api/v1/me/dashboard      — requires consent, same 403 CONSENT_REQUIRED ga
 ```
 If there's no active journey, `journey` is `null`, `journeySetupRequired` is `true`, and `nextActions` is empty — prompt the user to create one. **`nextActions` is a forward-looking roadmap, not just "the one next thing"**: it includes the user's current stage and everything after it (so late sign-ups never see earlier stages marked as missed), but never anything from an earlier stage. `professionalType` values today: `GYNECOLOGIST`, `NUTRITIONIST`, `LACTATION_CONSULTANT`, `PEDIATRICIAN`, `POSTPARTUM_PHYSIOTHERAPIST`, `CLINICAL_PSYCHOLOGIST`. The psychologist item (`optional: true`) always appears, at every stage — offer it, don't push it. **Every item is `reviewStatus: "PENDING_CLINICAL_REVIEW"` right now — this content hasn't been clinically signed off yet; say so if you surface it in the UI, don't present it as medical advice.**
 
+## 8. Phase 2 contract — plans, checkout & entitlements
+
+Verified live against the real stage Supabase DB with a real Firebase-signed-up, verified user — same rigor as §7. "Checkout" here means our own `/orders` + `/payments/create` + mock succeed/fail; there's no separate cart resource (plan selection goes straight to an order).
+
+**New error codes**, same `{code, message}` shape as §7:
+| Code | Status | When |
+|---|---|---|
+| `PLAN_NOT_FOUND` | 404 | `planId` on `POST /orders` has no active version |
+| `IDEMPOTENCY_KEY_CONFLICT` | 409 | Same `Idempotency-Key` reused with a different `planId`/`paymentMode` |
+| `PAYMENT_NOT_ALLOWED` | 409 | `POST /payments/create` for an order that isn't `PENDING` |
+| `PAYMENT_NOT_FOUND` | 404 | Unknown payment id |
+| `INVALID_WEBHOOK_SIGNATURE` | 401 | Webhook signature didn't verify |
+| `REFUND_NOT_ALLOWED` | 409 | Refund on a non-paid order, or amount exceeds what's left refundable |
+| `VALIDATION_FAILED` | 400 | Also fires if `Idempotency-Key` is missing on `POST /orders` |
+
+**Plans — public, no auth needed:**
+```
+GET /api/v1/plans
+GET /api/v1/plans/{id}
+```
+```json
+{
+  "id": 1, "code": "STANDARD", "name": "Standard",
+  "oneTimePrice": 9999.00, "installmentTotalPrice": 11998.80, "installmentCount": 2,
+  "totalSessions": 9, "validityDays": 365,
+  "inclusions": ["9 total sessions across your assigned care team", "..."],
+  "exclusions": ["Hospital delivery charges", "Sessions beyond the allocated count"],
+  "allocations": [{ "professionalType": "GYNECOLOGIST", "sessionCount": 5 }, { "professionalType": "NUTRITIONIST", "sessionCount": 4 }]
+}
+```
+3 tiers exist: `STANDARD` (₹9,999/9 sessions), `CARE` (₹14,999/12), `PREMIUM` (₹24,999/16). **The per-professional allocation, validity window (365 days everywhere) and inclusion/exclusion copy are placeholder defaults, not final "blueprint §5" numbers** — that source document wasn't available when these were seeded. Treat them as provisional; they'll change via a later migration, same caveat as Phase 1's DRAFT consent text. `installmentTotalPrice` = one-time price × 1.20, `installmentCount` is always 2 right now (also a placeholder).
+
+**Orders — `Logged in + Verified`:**
+```
+POST /api/v1/orders    { "planId", "paymentMode": "ONE_TIME" | "INSTALLMENT" }
+Idempotency-Key: <any client-generated unique string>   -- required header, 400 VALIDATION_FAILED if missing
+GET  /api/v1/orders
+GET  /api/v1/orders/{id}
+```
+Generate a fresh `Idempotency-Key` (e.g. a UUID) per checkout *attempt*, and **reuse the exact same key** if you retry the same request (network error, double-tap, etc.) — the server returns the original order instead of creating a duplicate. Reusing a key with a *different* `planId`/`paymentMode` is rejected (409 `IDEMPOTENCY_KEY_CONFLICT`) rather than silently doing the wrong thing.
+
+Response:
+```json
+{
+  "id": 1, "planVersionId": 1, "planCode": "STANDARD", "status": "PENDING",
+  "paymentMode": "ONE_TIME", "price": 9999.00,
+  "installmentSchedule": [],
+  "refunds": [],
+  "createdAt": "2026-10-28T23:25:56.49"
+}
+```
+`price` is always server-computed from the plan's current active version — there's nowhere to send a price from the client at all. `status` is one of `PENDING, PAID, FAILED, REFUNDED, PARTIALLY_REFUNDED, DISPUTED` (`DISPUTED` isn't reachable yet — no real gateway sends dispute events until Phase 7). For `paymentMode: "INSTALLMENT"`, `installmentSchedule` is populated: `[{ "installmentNumber": 1, "amount": 5999.40, "dueDate": "2026-10-28" }, { "installmentNumber": 2, "amount": 5999.40, "dueDate": "2026-11-27" }]` — **this is a read-only breakdown for display only**. The mock payment in this phase always settles the *entire* order in one step regardless of installment vs one-time; real installment collection is Phase 7.
+
+**Payments — the mock gateway:**
+```
+POST /api/v1/payments/create                          { "orderId" }   -- Logged in + Verified
+POST /api/v1/payments/{id}/mock/succeed                               -- Logged in + Verified
+POST /api/v1/payments/{id}/mock/fail                                  -- Logged in + Verified
+POST /api/v1/payments/webhook                                         -- Public, signature-verified
+```
+`POST /payments/create` response — **this answers exactly what a "checkout" step hands back in this phase**:
+```json
+{
+  "id": 1, "orderId": 1, "status": "CREATED", "amount": 9999.00, "provider": "MOCK",
+  "mockSucceedPath": "/api/v1/payments/1/mock/succeed",
+  "mockFailPath": "/api/v1/payments/1/mock/fail"
+}
+```
+There's no hosted checkout page or redirect in Phase 2 — build your own "simulated payment" screen with two buttons that `POST` to `mockSucceedPath`/`mockFailPath` (same Firebase bearer token as everything else, no special auth). Each internally builds a real signed webhook event and runs it through the exact same processing path the public `/payments/webhook` endpoint uses, so the result is indistinguishable from a real gateway round-trip: `{"status": "PAYMENT_SUCCEEDED"}` or `{"status": "PAYMENT_FAILED"}`, and the order/entitlements update accordingly. Calling `mock/succeed` more than once is harmless (idempotent, no duplicate entitlements). **These two endpoints 404 once Phase 7 ships a real gateway** — don't build the "simulated checkout" screen as anything other than a clearly-temporary prototype affordance.
+
+**Entitlements — the session wallet, `Logged in` (no Verified gate — viewing is lower-stakes than paying):**
+```
+GET /api/v1/entitlements
+```
+```json
+[
+  { "id": 1, "orderId": 1, "professionalType": "GYNECOLOGIST", "totalSessions": 5, "usedSessions": 0, "remainingSessions": 5, "expiresAt": "2027-10-28T23:26:06.76", "planCode": "STANDARD" },
+  { "id": 2, "orderId": 1, "professionalType": "NUTRITIONIST", "totalSessions": 4, "usedSessions": 0, "remainingSessions": 4, "expiresAt": "...", "planCode": "STANDARD" }
+]
+```
+Granted automatically the moment a payment succeeds — nothing to call to "claim" them. `usedSessions` is always `0` right now: there's no booking/session-completion flow yet (that's Phase 3) to consume one.
+
+**Admin (finance) — not part of the UI's own build, documented for completeness:**
+```
+POST /api/v1/admin/orders/{id}/refunds   { "amount", "reason" }
+GET  /api/v1/admin/finance/summary
+```
+Refunds are always an admin-entered amount — there's no "calculate the refund" button anywhere, by design (the refund/unused-session policy, decision log #4, is still open).
+
 ## Quick product/content endpoints (no auth needed, safe to build against today)
-`GET /api/v1/products`, `/api/v1/checklists`, `/api/v1/hospitals`, `/api/v1/doctor-sessions`, `/api/v1/nurse-companion/packages`, `/api/v1/features`, `/api/v1/consent-documents/current` — all public, all working, full details in Swagger.
+`GET /api/v1/products`, `/api/v1/checklists`, `/api/v1/hospitals`, `/api/v1/doctor-sessions`, `/api/v1/nurse-companion/packages`, `/api/v1/features`, `/api/v1/consent-documents/current`, `/api/v1/plans`, `/api/v1/plans/{id}` — all public, all working, full details in Swagger.
