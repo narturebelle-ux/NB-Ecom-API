@@ -306,5 +306,83 @@ GET  /api/v1/admin/finance/summary
 ```
 Refunds are always an admin-entered amount — there's no "calculate the refund" button anywhere, by design (the refund/unused-session policy, decision log #4, is still open).
 
+## 9. Phase 3 contract — providers, booking & sessions
+
+Verified live against the real stage Supabase DB (the public endpoints and the `@RequireVerified` gate — the admin-only provider-onboarding chain is covered by the automated test suite instead; see the note at the end of this section).
+
+**New error codes**, same `{code, message}` shape as §7/§8:
+| Code | Status | When |
+|---|---|---|
+| `PROVIDER_NOT_FOUND` | 404 | Unknown `providerId` |
+| `PROVIDER_NOT_BOOKABLE` | 409 | Provider isn't `VERIFIED`/`ACTIVE` |
+| `INVALID_PROVIDER_STATUS_TRANSITION` | 409 | Illegal admin status change (admin-only, see below) |
+| `SERVICE_OFFERING_NOT_FOUND` | 404 | Unknown/inactive `serviceOfferingId` for that provider |
+| `SLOT_NOT_AVAILABLE` | 409 | Slot doesn't exist, isn't `OPEN`, or lost the booking race |
+| `NO_ENTITLEMENT_AVAILABLE` | 409 | No remaining session of that provider's professional type |
+| `BOOKING_NOT_ALLOWED` | 409 | Wrong-state action (e.g. completing an already-`COMPLETED` booking, cancelling a non-`BOOKED` one) |
+| `FEEDBACK_NOT_ALLOWED` | 409 | Feedback before completion, or a second submission |
+
+**Provider directory — public, no auth needed:**
+```
+GET /api/v1/providers                         ?professionalType=&language=&city=&modality=   (all optional)
+GET /api/v1/providers/{id}
+GET /api/v1/providers/{id}/slots               -- OPEN, future-only, ordered
+```
+Only `VERIFIED`/`ACTIVE` providers are ever listed. `professionalType` is one of `GYNECOLOGIST, NUTRITIONIST, LACTATION_CONSULTANT, PEDIATRICIAN, POSTPARTUM_PHYSIOTHERAPIST, CLINICAL_PSYCHOLOGIST, REGISTERED_NURSE`; `modality` is `VIRTUAL` or `PHYSICAL`. Provider response never includes credentials or the linked `userId`:
+```json
+{ "id": 1, "professionalType": "GYNECOLOGIST", "displayName": "Dr. ...", "bio": "...", "city": "Bengaluru", "languages": ["English", "Hindi"] }
+```
+Slots: `{ "id": 7, "startAt": "2026-11-01T10:00:00", "endAt": "2026-11-01T10:30:00", "status": "OPEN" }`.
+
+**No video-call integration in this phase** — `modality` on a provider's service offerings is filter/display metadata only; there's no meeting link anywhere in any response. Build the "join session" UI as an explicit placeholder if you need one at all right now.
+
+**Bookings — `Logged in + Verified`:**
+```
+POST /api/v1/bookings          { "providerId", "serviceOfferingId", "slotId" }
+GET  /api/v1/bookings          -- your own, as the booking user OR as the assigned provider if your account is one
+GET  /api/v1/bookings/{id}     -- owner, assigned provider, or admin
+POST /api/v1/bookings/{id}/cancel       { "reason" }           -- owner, assigned provider, or admin
+POST /api/v1/bookings/{id}/reschedule   { "newSlotId", "reason" }
+```
+No `Idempotency-Key` here (unlike `POST /orders`) — the slot's own claim uniqueness makes a duplicate click safely 409 on its own. Response:
+```json
+{
+  "id": 12, "userId": 7, "providerId": 1, "serviceOfferingId": 3, "slotId": 7,
+  "professionalType": "GYNECOLOGIST", "status": "BOOKED",
+  "scheduledStart": "2026-11-01T10:00:00", "scheduledEnd": "2026-11-01T10:30:00",
+  "providerNote": null, "noteLockedAt": null, "rescheduledFromBookingId": null,
+  "createdAt": "2026-10-29T08:03:00"
+}
+```
+`status` is one of `BOOKED, CANCELLED, RESCHEDULED, IN_PROGRESS, COMPLETED, NO_SHOW_PROVIDER, NO_SHOW_USER`. **Booking a session does not consume anything from `GET /entitlements` yet** — only completing it does (see below). Rescheduling never cancels in the usual sense: the old booking becomes `RESCHEDULED` (not `CANCELLED`), freeing its slot, and a brand-new booking is created referencing it via `rescheduledFromBookingId`.
+
+**Session lifecycle — provider-or-admin only for start/complete:**
+```
+POST  /api/v1/bookings/{id}/start                                  -- requires BOOKED
+POST  /api/v1/bookings/{id}/complete      { "note" }                -- requires BOOKED or IN_PROGRESS; note is required
+POST  /api/v1/bookings/{id}/no-show       { "party", "reason" }    -- party: "PROVIDER" | "USER"
+PATCH /api/v1/bookings/{id}/note          { "note", "reason" }      -- only after COMPLETED
+```
+**`complete` is the only action that consumes a session** — it decrements the matching `GET /entitlements` row's `remainingSessions` by exactly 1 (FIFO by the entitlement's own expiry) and creates a payout record on the provider's side; nothing else in this list touches entitlements or payouts. Notes lock the moment a session completes — `PATCH .../note` after that writes a new version and is itself audited (an append-only history, not shown via the API yet, but every amendment is tracked server-side). **No-show reporting is party-restricted**: the booking's own user can only report `"PROVIDER"` (the provider didn't show), the assigned provider can only report `"USER"` — reporting your own side is rejected. No-show consumes nothing and pays out nothing (the refund/cancellation policy, decision log, is still open — this is a safe default, not a final rule).
+
+**Feedback:**
+```
+POST /api/v1/bookings/{id}/feedback   { "rating": 1-5, "comment"? }   -- booking's own user only, only after COMPLETED, only once
+```
+
+**Admin provider onboarding — not part of the UI's own build, documented for completeness (and because "how do providers sign in" depends on it):**
+```
+POST   /api/v1/admin/providers                    { "userId", "professionalType", "displayName"?, "bio"?, "city"?, "languages"? }
+GET    /api/v1/admin/providers[/{id}]
+POST   /api/v1/admin/providers/{id}/verify         { "reason" }     -- requires current status UNDER_REVIEW
+PATCH  /api/v1/admin/providers/{id}/status         { "status", "reason" }
+POST   /api/v1/admin/providers/{id}/credentials    { "credentialType", "documentReference"?, "issuedAt"?, "expiresAt"? }
+POST   /api/v1/admin/providers/{id}/services       { "name", "description"?, "modality", "durationMinutes" }
+POST   /api/v1/admin/providers/{id}/slots          { "slots": [{ "startAt", "endAt" }, ...] }
+```
+Status machine: `INVITED → DOCUMENTS_PENDING → UNDER_REVIEW → VERIFIED → ACTIVE/PAUSED/SUSPENDED → DEACTIVATED` (terminal). `PATCH .../status` never accepts `VERIFIED` as a target — only `/verify` grants it, because that's also the moment the professional's account gains the matching role (e.g. `GYNECOLOGIST`) and becomes a bookable provider. **No self-service exists for providers yet** — a professional must already have signed up normally through Firebase before an admin can create their `Provider` profile; there's no pre-signup invite flow, and credentials/services/slots are admin-entered only (no provider portal in this phase, same reasoning the roadmap uses to defer it on the UI side too).
+
+**Note on this section's verification**: the public endpoints and the `@RequireVerified`/`EMAIL_NOT_VERIFIED` gate on `POST /bookings` were confirmed live against the real stage database. The admin-only onboarding chain (create → verify → book → complete) could not be re-verified live the same way — doing so would have required extracting the stage DB password to hand-grant an admin role, which this session's safety guardrail correctly blocked (same situation as Phase 2's finance endpoints). It's covered instead by `ProviderTest`/`BookingTest`, including a dedicated test proving that verifying a provider grants their role immediately on the next request with no new Firebase ID token required.
+
 ## Quick product/content endpoints (no auth needed, safe to build against today)
-`GET /api/v1/products`, `/api/v1/checklists`, `/api/v1/hospitals`, `/api/v1/doctor-sessions`, `/api/v1/nurse-companion/packages`, `/api/v1/features`, `/api/v1/consent-documents/current`, `/api/v1/plans`, `/api/v1/plans/{id}` — all public, all working, full details in Swagger.
+`GET /api/v1/products`, `/api/v1/checklists`, `/api/v1/hospitals`, `/api/v1/doctor-sessions`, `/api/v1/nurse-companion/packages`, `/api/v1/features`, `/api/v1/consent-documents/current`, `/api/v1/plans`, `/api/v1/plans/{id}`, `/api/v1/providers`, `/api/v1/providers/{id}`, `/api/v1/providers/{id}/slots` — all public, all working, full details in Swagger.
