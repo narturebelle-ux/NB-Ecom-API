@@ -499,5 +499,35 @@ POST /api/v1/me/onboarding/call   { "slotId" }
 ```
 At most one active call booking per user — booking a second one before cancelling the first is a 409 `ONBOARDING_CALL_ALREADY_BOOKED`. **No cancel/reschedule endpoint yet** — not in the proposed contract, and the roadmap note on "no coordinator portal" applies here the same way it did to Phase 3's provider portal. Slots are admin-seeded only (`POST /admin/onboarding/call-slots`, same shape as Phase 3's `POST /admin/providers/{id}/slots`) — there's no real coordinator-calendar integration behind this.
 
+## 12. Phase 5 contract — reminders & notifications
+
+Verified live against the real stage Supabase DB (migration V12 applies cleanly on top of V1-V11). Covered by `NotificationsTest`: preference defaults/overrides, idempotent reminder generation, ownership on dismiss, consent-skip, and the payment-reconciliation dedupe.
+
+**New error codes**: none — these endpoints only 404/403, no new domain errors.
+
+**Reminders — own, `Logged in`:**
+```
+GET  /api/v1/me/reminders                 -- ACTIVE only, newest first
+POST /api/v1/me/reminders/{id}/dismiss    -- 403 if it isn't yours
+```
+```json
+{ "id": 1, "type": "BOOKING_UPCOMING", "title": "Upcoming care session",
+  "body": "You have an upcoming care session scheduled in the next 24 hours.",
+  "dueAt": "2026-11-01T10:00:00", "sourceType": "BOOKING", "sourceId": 12,
+  "status": "ACTIVE", "createdAt": "..." }
+```
+`type` is `BOOKING_UPCOMING` or `JOURNEY_NEXT_ACTION`. **Message text is deliberately generic** — never a protocol-step title, provider name, or any clinical specific — per the roadmap's "no health details in message text." Reminders are server-generated (a background job scans bookings starting in the next 24h and active journeys with pending next actions, every 15 minutes) — there's no `POST` to create one directly. Generation skips any user with pending required consents.
+
+**Notification channel preferences — own, `Logged in`:**
+```
+GET /api/v1/me/notification-preferences
+PUT /api/v1/me/notification-preferences/{channel}   { "enabled" }
+```
+```json
+[{ "channel": "IN_APP", "enabled": true }, { "channel": "EMAIL", "enabled": false },
+ { "channel": "SMS", "enabled": false }, { "channel": "WHATSAPP", "enabled": false }]
+```
+`channel` is `IN_APP, EMAIL, SMS, WHATSAPP`. **IN_APP defaults on, everything else defaults off** until the user explicitly enables it. **Enabling EMAIL/SMS/WHATSAPP changes nothing real right now** — no provider is wired in (decision log #9 is still blank), so those channels log intent server-side only. Don't build UI copy that implies a real email/SMS/WhatsApp message will be sent.
+
 ## Quick product/content endpoints (no auth needed, safe to build against today)
 `GET /api/v1/products`, `/api/v1/checklists`, `/api/v1/hospitals`, `/api/v1/doctor-sessions`, `/api/v1/nurse-companion/packages`, `/api/v1/features`, `/api/v1/consent-documents/current`, `/api/v1/plans`, `/api/v1/plans/{id}`, `/api/v1/providers`, `/api/v1/providers/{id}`, `/api/v1/providers/{id}/slots` — all public, all working, full details in Swagger.
