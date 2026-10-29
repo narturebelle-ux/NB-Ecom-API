@@ -176,6 +176,13 @@ public class ProviderService {
         return providerCredentialRepository.findByProviderId(providerId);
     }
 
+    /** Public-facing — active offerings only, so the UI has a real serviceOfferingId to book against. */
+    public List<ServiceOffering> activeOfferingsFor(Long providerId) {
+        return serviceOfferingRepository.findByProviderId(providerId).stream()
+                .filter(ServiceOffering::isActive)
+                .toList();
+    }
+
     public ProviderCredential addCredential(Long providerId, CreateCredentialRequest req) {
         findOrThrow(providerId);
         ProviderCredential credential = new ProviderCredential();

@@ -328,11 +328,17 @@ GET /api/v1/providers                         ?professionalType=&language=&city=
 GET /api/v1/providers/{id}
 GET /api/v1/providers/{id}/slots               -- OPEN, future-only, ordered
 ```
-Only `VERIFIED`/`ACTIVE` providers are ever listed. `professionalType` is one of `GYNECOLOGIST, NUTRITIONIST, LACTATION_CONSULTANT, PEDIATRICIAN, POSTPARTUM_PHYSIOTHERAPIST, CLINICAL_PSYCHOLOGIST, REGISTERED_NURSE`; `modality` is `VIRTUAL` or `PHYSICAL`. Provider response never includes credentials or the linked `userId`:
+Only `VERIFIED`/`ACTIVE` providers are ever listed. `professionalType` is one of `GYNECOLOGIST, NUTRITIONIST, LACTATION_CONSULTANT, PEDIATRICIAN, POSTPARTUM_PHYSIOTHERAPIST, CLINICAL_PSYCHOLOGIST, REGISTERED_NURSE`; `modality` is `VIRTUAL` or `PHYSICAL`. Provider response never includes credentials or the linked `userId`. **`services` carries the provider's active offerings — this is where a real `serviceOfferingId` for `POST /bookings` comes from** (added after initial publish once the UI team flagged that `POST /bookings` needs one and nothing exposed it):
 ```json
-{ "id": 1, "professionalType": "GYNECOLOGIST", "displayName": "Dr. ...", "bio": "...", "city": "Bengaluru", "languages": ["English", "Hindi"] }
+{
+  "id": 1, "professionalType": "GYNECOLOGIST", "displayName": "Dr. ...", "bio": "...",
+  "city": "Bengaluru", "languages": ["English", "Hindi"],
+  "services": [
+    { "id": 3, "name": "Consultation", "description": null, "modality": "VIRTUAL", "durationMinutes": 30 }
+  ]
+}
 ```
-Slots: `{ "id": 7, "startAt": "2026-11-01T10:00:00", "endAt": "2026-11-01T10:30:00", "status": "OPEN" }`.
+A provider with `services: []` has nothing bookable yet — don't guess an id, show a "not taking bookings yet" state instead. Slots: `{ "id": 7, "startAt": "2026-11-01T10:00:00", "endAt": "2026-11-01T10:30:00", "status": "OPEN" }`.
 
 **No video-call integration in this phase** — `modality` on a provider's service offerings is filter/display metadata only; there's no meeting link anywhere in any response. Build the "join session" UI as an explicit placeholder if you need one at all right now.
 

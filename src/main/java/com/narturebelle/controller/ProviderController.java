@@ -27,7 +27,7 @@ public class ProviderController {
                                                          @RequestParam(required = false) String city,
                                                          @RequestParam(required = false) Modality modality) {
         List<ProviderResponse> providers = providerService.listPublic(professionalType, language, city, modality)
-                .stream().map(ProviderResponse::from).toList();
+                .stream().map(this::toResponse).toList();
         return ResponseEntity.ok(providers);
     }
 
@@ -37,7 +37,11 @@ public class ProviderController {
         if (provider == null) {
             return ResponseEntity.notFound().build();
         }
-        return ResponseEntity.ok(ProviderResponse.from(provider));
+        return ResponseEntity.ok(toResponse(provider));
+    }
+
+    private ProviderResponse toResponse(Provider provider) {
+        return ProviderResponse.from(provider, providerService.activeOfferingsFor(provider.getId()));
     }
 
     @GetMapping("/{id}/slots")

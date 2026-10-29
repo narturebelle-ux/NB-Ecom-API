@@ -207,6 +207,29 @@ class ProviderTest {
     }
 
     @Test
+    void getProvider_includesActiveServiceOfferings_soUiCanBook() throws Exception {
+        Long providerId = createProvider();
+        verifyProvider(providerId);
+
+        mockMvc.perform(post("/api/v1/admin/providers/" + providerId + "/services")
+                        .header("Authorization", "Bearer " + TOKEN_ADMIN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Consultation\",\"modality\":\"VIRTUAL\",\"durationMinutes\":30}"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/v1/providers/" + providerId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.services", org.hamcrest.Matchers.hasSize(1)))
+                .andExpect(jsonPath("$.services[0].name").value("Consultation"))
+                .andExpect(jsonPath("$.services[0].modality").value("VIRTUAL"))
+                .andExpect(jsonPath("$.services[0].id").exists());
+
+        mockMvc.perform(get("/api/v1/providers"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].services", org.hamcrest.Matchers.hasSize(1)));
+    }
+
+    @Test
     void getSlots_excludesBookedAndPastSlots() throws Exception {
         Long providerId = createProvider();
         verifyProvider(providerId);
