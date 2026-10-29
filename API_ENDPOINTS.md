@@ -81,6 +81,8 @@ Errors are JSON `{"code": "...", "message": "..."}` — `401 UNAUTHENTICATED`, `
 | GET | `/api/v1/onboarding/call-slots` | Logged in + Consent | Onboarding Part A — OPEN, future-only |
 | POST | `/api/v1/me/onboarding/call` | Logged in + Consent | Onboarding Part A — at most one active call per user |
 | POST | `/api/v1/admin/onboarding/call-slots` | Admin | Onboarding Part A — seeds call slots; no real coordinator-calendar integration |
+| POST | `/api/v1/me/onboarding/callback-request` | Logged in + Consent | Onboarding Part A — fallback when no call slots exist |
+| GET | `/api/v1/admin/onboarding/callback-requests` | Admin | Onboarding Part A — for a coordinator to act on |
 | GET | `/api/v1/me/reminders` | Logged in | Phase 5 — ACTIVE only, server-generated |
 | POST | `/api/v1/me/reminders/{id}/dismiss` | Logged in | Phase 5 — 403 if it isn't yours |
 | GET | `/api/v1/me/notification-preferences` | Logged in | Phase 5 — IN_APP defaults on, others off |

@@ -497,7 +497,13 @@ POST /api/v1/me/onboarding/call   { "slotId" }
 ```json
 { "id": 7, "startAt": "2026-11-02T10:00:00", "endAt": "2026-11-02T10:30:00", "status": "OPEN" }
 ```
-At most one active call booking per user — booking a second one before cancelling the first is a 409 `ONBOARDING_CALL_ALREADY_BOOKED`. **No cancel/reschedule endpoint yet** — not in the proposed contract, and the roadmap note on "no coordinator portal" applies here the same way it did to Phase 3's provider portal. Slots are admin-seeded only (`POST /admin/onboarding/call-slots`, same shape as Phase 3's `POST /admin/providers/{id}/slots`) — there's no real coordinator-calendar integration behind this.
+At most one active call booking per user — booking a second one before cancelling the first is a 409 `ONBOARDING_CALL_ALREADY_BOOKED`. **No cancel/reschedule endpoint yet** — not in the proposed contract, and the roadmap note on "no coordinator portal" applies here the same way it did to Phase 3's provider portal. Slots are seeded two ways: `DataInitializer` auto-seeds a placeholder weekday 10am slate for the next two weeks on every environment's first boot (so there's always something bookable), and `POST /admin/onboarding/call-slots` (same shape as Phase 3's `POST /admin/providers/{id}/slots`) lets an admin add more. There's no real coordinator-calendar integration behind either path.
+
+**Callback-request fallback — for when `call-slots` returns `[]`:**
+```
+POST /api/v1/me/onboarding/callback-request   { "note"? }   -> { "id", "userId", "note", "createdAt" }
+```
+Use this instead of a browser-only "ask for a call" state — it's a real server-side record (plus an audit event) a coordinator can act on via `GET /admin/onboarding/callback-requests` (admin-only, since there's no coordinator portal). `note` is optional, max 500 characters.
 
 ## 12. Phase 5 contract — reminders & notifications
 
