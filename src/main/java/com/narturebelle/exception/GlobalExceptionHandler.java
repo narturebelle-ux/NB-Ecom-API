@@ -186,6 +186,18 @@ public class GlobalExceptionHandler {
                 .body(Map.of("code", "RECORD_NOT_ALLOWED", "message", e.getMessage()));
     }
 
+    @ExceptionHandler(OnboardingCallSlotNotAvailableException.class)
+    public ResponseEntity<Map<String, String>> handleOnboardingCallSlotNotAvailable(OnboardingCallSlotNotAvailableException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(Map.of("code", "ONBOARDING_CALL_SLOT_NOT_AVAILABLE", "message", e.getMessage()));
+    }
+
+    @ExceptionHandler(OnboardingCallAlreadyBookedException.class)
+    public ResponseEntity<Map<String, String>> handleOnboardingCallAlreadyBooked(OnboardingCallAlreadyBookedException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(Map.of("code", "ONBOARDING_CALL_ALREADY_BOOKED", "message", e.getMessage()));
+    }
+
     /**
      * A required header (e.g. Idempotency-Key) is missing. Without this, Spring's
      * MissingRequestHeaderException would fall through to the 500 catch-all below instead of a 400 —
