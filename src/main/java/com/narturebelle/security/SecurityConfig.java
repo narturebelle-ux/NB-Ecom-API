@@ -51,6 +51,7 @@ public class SecurityConfig {
                                 "/api/v1/consent-documents/**",
                                 "/api/v1/plans/**",
                                 "/api/v1/payments/webhook",
+                                "/api/v1/providers/**",
                                 "/swagger-ui.html",
                                 "/swagger-ui/**",
                                 "/v3/api-docs/**"

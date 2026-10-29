@@ -1,5 +1,6 @@
 package com.narturebelle.security;
 
+import com.narturebelle.repository.ProviderRepository;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -10,6 +11,12 @@ import java.util.Optional;
 /** Reusable ownership/identity checks — reuse requireSelfOrAdmin for future cart/order endpoints too. */
 @Component
 public class AuthorizationService {
+
+    private final ProviderRepository providerRepository;
+
+    public AuthorizationService(ProviderRepository providerRepository) {
+        this.providerRepository = providerRepository;
+    }
 
     public FirebaseUserPrincipal currentPrincipal() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
@@ -36,6 +43,27 @@ public class AuthorizationService {
         }
         if (principal.userId() == null || !principal.userId().equals(targetUserId)) {
             throw new AccessDeniedException("You may only access your own resource.");
+        }
+    }
+
+    /**
+     * Three-way booking access: admin, the booking's own user, or the Provider assigned to it.
+     * Throws AccessDeniedException (-> 403 FORBIDDEN) otherwise.
+     */
+    public void requireBookingAccess(Long bookingUserId, Long bookingProviderId) {
+        FirebaseUserPrincipal principal = currentPrincipal();
+        if (principal.isAdmin()) {
+            return;
+        }
+        if (principal.userId() != null && principal.userId().equals(bookingUserId)) {
+            return;
+        }
+        boolean isAssignedProvider = principal.userId() != null
+                && providerRepository.findByUserId(principal.userId())
+                        .map(provider -> provider.getId().equals(bookingProviderId))
+                        .orElse(false);
+        if (!isAssignedProvider) {
+            throw new AccessDeniedException("You may only access your own bookings.");
         }
     }
 }

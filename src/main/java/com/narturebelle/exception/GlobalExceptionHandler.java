@@ -105,6 +105,54 @@ public class GlobalExceptionHandler {
                 .body(Map.of("code", "REFUND_NOT_ALLOWED", "message", e.getMessage()));
     }
 
+    @ExceptionHandler(ProviderNotFoundException.class)
+    public ResponseEntity<Map<String, String>> handleProviderNotFound(ProviderNotFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(Map.of("code", "PROVIDER_NOT_FOUND", "message", e.getMessage()));
+    }
+
+    @ExceptionHandler(ProviderNotBookableException.class)
+    public ResponseEntity<Map<String, String>> handleProviderNotBookable(ProviderNotBookableException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(Map.of("code", "PROVIDER_NOT_BOOKABLE", "message", e.getMessage()));
+    }
+
+    @ExceptionHandler(InvalidProviderStatusTransitionException.class)
+    public ResponseEntity<Map<String, String>> handleInvalidProviderStatusTransition(InvalidProviderStatusTransitionException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(Map.of("code", "INVALID_PROVIDER_STATUS_TRANSITION", "message", e.getMessage()));
+    }
+
+    @ExceptionHandler(ServiceOfferingNotFoundException.class)
+    public ResponseEntity<Map<String, String>> handleServiceOfferingNotFound(ServiceOfferingNotFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(Map.of("code", "SERVICE_OFFERING_NOT_FOUND", "message", e.getMessage()));
+    }
+
+    @ExceptionHandler(SlotNotAvailableException.class)
+    public ResponseEntity<Map<String, String>> handleSlotNotAvailable(SlotNotAvailableException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(Map.of("code", "SLOT_NOT_AVAILABLE", "message", e.getMessage()));
+    }
+
+    @ExceptionHandler(NoEntitlementAvailableException.class)
+    public ResponseEntity<Map<String, String>> handleNoEntitlementAvailable(NoEntitlementAvailableException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(Map.of("code", "NO_ENTITLEMENT_AVAILABLE", "message", e.getMessage()));
+    }
+
+    @ExceptionHandler(BookingNotAllowedException.class)
+    public ResponseEntity<Map<String, String>> handleBookingNotAllowed(BookingNotAllowedException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(Map.of("code", "BOOKING_NOT_ALLOWED", "message", e.getMessage()));
+    }
+
+    @ExceptionHandler(FeedbackNotAllowedException.class)
+    public ResponseEntity<Map<String, String>> handleFeedbackNotAllowed(FeedbackNotAllowedException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(Map.of("code", "FEEDBACK_NOT_ALLOWED", "message", e.getMessage()));
+    }
+
     /**
      * A required header (e.g. Idempotency-Key) is missing. Without this, Spring's
      * MissingRequestHeaderException would fall through to the 500 catch-all below instead of a 400 —
