@@ -46,6 +46,13 @@ firebase:
 # Feature flags live in the feature_flags DB table now (see V4__feature_flags.sql and
 # AdminFeatureFlagController) — not here. GET /api/v1/features reads the table directly.
 
+# Mock payment provider (Phase 2). Signs/verifies webhook payloads via HMAC-SHA256. The default is
+# fine for local/test — only matters once a real secret needs to be kept out of source control, and
+# MockPaymentProvider never ships past the prototype anyway (Phase 7 replaces it with a real gateway).
+payments:
+  mock:
+    webhook-secret: ${MOCK_PAYMENT_WEBHOOK_SECRET:dev-only-mock-webhook-secret-change-me}
+
 # Logging Configuration
 logging:
   level:

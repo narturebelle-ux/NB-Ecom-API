@@ -8,6 +8,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.servlet.NoHandlerFoundException;
@@ -65,6 +66,56 @@ public class GlobalExceptionHandler {
         body.put("code", "VALIDATION_FAILED");
         body.put("message", e.getMessage());
         body.put("fields", Map.of(e.getField(), e.getMessage()));
+        return ResponseEntity.badRequest().body(body);
+    }
+
+    @ExceptionHandler(PlanNotFoundException.class)
+    public ResponseEntity<Map<String, String>> handlePlanNotFound(PlanNotFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(Map.of("code", "PLAN_NOT_FOUND", "message", e.getMessage()));
+    }
+
+    @ExceptionHandler(IdempotencyKeyConflictException.class)
+    public ResponseEntity<Map<String, String>> handleIdempotencyKeyConflict(IdempotencyKeyConflictException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(Map.of("code", "IDEMPOTENCY_KEY_CONFLICT", "message", e.getMessage()));
+    }
+
+    @ExceptionHandler(PaymentNotAllowedException.class)
+    public ResponseEntity<Map<String, String>> handlePaymentNotAllowed(PaymentNotAllowedException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(Map.of("code", "PAYMENT_NOT_ALLOWED", "message", e.getMessage()));
+    }
+
+    @ExceptionHandler(PaymentNotFoundException.class)
+    public ResponseEntity<Map<String, String>> handlePaymentNotFound(PaymentNotFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(Map.of("code", "PAYMENT_NOT_FOUND", "message", e.getMessage()));
+    }
+
+    @ExceptionHandler(InvalidWebhookSignatureException.class)
+    public ResponseEntity<Map<String, String>> handleInvalidWebhookSignature(InvalidWebhookSignatureException e) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(Map.of("code", "INVALID_WEBHOOK_SIGNATURE", "message", e.getMessage()));
+    }
+
+    @ExceptionHandler(RefundNotAllowedException.class)
+    public ResponseEntity<Map<String, String>> handleRefundNotAllowed(RefundNotAllowedException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(Map.of("code", "REFUND_NOT_ALLOWED", "message", e.getMessage()));
+    }
+
+    /**
+     * A required header (e.g. Idempotency-Key) is missing. Without this, Spring's
+     * MissingRequestHeaderException would fall through to the 500 catch-all below instead of a 400 —
+     * nothing needed a required header before Phase 2's POST /orders.
+     */
+    @ExceptionHandler(MissingRequestHeaderException.class)
+    public ResponseEntity<Map<String, Object>> handleMissingHeader(MissingRequestHeaderException e) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("code", "VALIDATION_FAILED");
+        body.put("message", "Missing required header: " + e.getHeaderName());
+        body.put("fields", Map.of(e.getHeaderName(), "This header is required."));
         return ResponseEntity.badRequest().body(body);
     }
 
