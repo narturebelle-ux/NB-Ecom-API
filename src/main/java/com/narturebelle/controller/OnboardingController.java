@@ -1,6 +1,8 @@
 package com.narturebelle.controller;
 
 import com.narturebelle.dto.BookOnboardingCallRequest;
+import com.narturebelle.dto.CallbackRequestResponse;
+import com.narturebelle.dto.CreateCallbackRequestRequest;
 import com.narturebelle.dto.OnboardingCallResponse;
 import com.narturebelle.dto.OnboardingCallSlotResponse;
 import com.narturebelle.dto.OnboardingIntakeResponse;
@@ -8,6 +10,7 @@ import com.narturebelle.dto.OnboardingStatusResponse;
 import com.narturebelle.dto.UpsertOnboardingIntakeRequest;
 import com.narturebelle.exception.UserProfileNotFoundException;
 import com.narturebelle.model.OnboardingCall;
+import com.narturebelle.model.OnboardingCallbackRequest;
 import com.narturebelle.model.OnboardingIntake;
 import com.narturebelle.security.AuthorizationService;
 import com.narturebelle.security.FirebaseUserPrincipal;
@@ -61,6 +64,15 @@ public class OnboardingController {
         Long userId = requireUserId(authorizationService.currentPrincipal());
         OnboardingCall call = onboardingService.bookCall(userId, req);
         return ResponseEntity.ok(OnboardingCallResponse.from(call));
+    }
+
+    @RequireConsent
+    @PostMapping("/api/v1/me/onboarding/callback-request")
+    public ResponseEntity<CallbackRequestResponse> requestCallback(@Valid @RequestBody(required = false) CreateCallbackRequestRequest req) {
+        Long userId = requireUserId(authorizationService.currentPrincipal());
+        OnboardingCallbackRequest request = onboardingService.requestCallback(userId,
+                req != null ? req : new CreateCallbackRequestRequest());
+        return ResponseEntity.ok(CallbackRequestResponse.from(request));
     }
 
     private Long requireUserId(FirebaseUserPrincipal principal) {

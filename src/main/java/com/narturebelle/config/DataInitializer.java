@@ -25,6 +25,7 @@ public class DataInitializer implements CommandLineRunner {
     private final PlanVersionRepository planVersionRepository;
     private final PlanEntitlementRepository planEntitlementRepository;
     private final PayoutRateRepository payoutRateRepository;
+    private final OnboardingCallSlotRepository onboardingCallSlotRepository;
 
     public DataInitializer(ProductRepository productRepository,
                            ChecklistTaskRepository checklistTaskRepository,
@@ -37,7 +38,8 @@ public class DataInitializer implements CommandLineRunner {
                            PlanRepository planRepository,
                            PlanVersionRepository planVersionRepository,
                            PlanEntitlementRepository planEntitlementRepository,
-                           PayoutRateRepository payoutRateRepository) {
+                           PayoutRateRepository payoutRateRepository,
+                           OnboardingCallSlotRepository onboardingCallSlotRepository) {
         this.productRepository = productRepository;
         this.checklistTaskRepository = checklistTaskRepository;
         this.hospitalPartnerRepository = hospitalPartnerRepository;
@@ -50,6 +52,7 @@ public class DataInitializer implements CommandLineRunner {
         this.planVersionRepository = planVersionRepository;
         this.planEntitlementRepository = planEntitlementRepository;
         this.payoutRateRepository = payoutRateRepository;
+        this.onboardingCallSlotRepository = onboardingCallSlotRepository;
     }
 
     @Override
@@ -64,6 +67,7 @@ public class DataInitializer implements CommandLineRunner {
         seedCareProtocolSteps();
         seedPlans();
         seedPayoutRates();
+        seedOnboardingCallSlots();
     }
 
     /**
@@ -263,6 +267,30 @@ public class DataInitializer implements CommandLineRunner {
             rate.setProfessionalType(professionalType);
             rate.setAmount(new BigDecimal("500.00"));
             payoutRateRepository.save(rate);
+        }
+    }
+
+    /**
+     * Placeholder coordinator-call availability so the onboarding call step is actually bookable
+     * in every environment without an admin manually seeding slots first. Real coordinator-calendar
+     * integration doesn't exist (see HANDOFF.md's Onboarding section) -- this is a fixed weekday
+     * 10am slate for the next two weeks, re-seeded harmlessly skipped once any slot already exists.
+     */
+    private void seedOnboardingCallSlots() {
+        if (onboardingCallSlotRepository.count() > 0) return;
+
+        LocalDateTime cursor = LocalDateTime.now().plusDays(1).withHour(10).withMinute(0).withSecond(0).withNano(0);
+        int seeded = 0;
+        while (seeded < 10) {
+            if (cursor.getDayOfWeek() != java.time.DayOfWeek.SATURDAY && cursor.getDayOfWeek() != java.time.DayOfWeek.SUNDAY) {
+                OnboardingCallSlot slot = new OnboardingCallSlot();
+                slot.setStartAt(cursor);
+                slot.setEndAt(cursor.plusMinutes(30));
+                slot.setStatus(SlotStatus.OPEN);
+                onboardingCallSlotRepository.save(slot);
+                seeded++;
+            }
+            cursor = cursor.plusDays(1);
         }
     }
 

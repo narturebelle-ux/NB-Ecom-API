@@ -1,16 +1,19 @@
 package com.narturebelle.service;
 
 import com.narturebelle.dto.BookOnboardingCallRequest;
+import com.narturebelle.dto.CreateCallbackRequestRequest;
 import com.narturebelle.dto.CreateOnboardingCallSlotsRequest;
 import com.narturebelle.dto.UpsertOnboardingIntakeRequest;
 import com.narturebelle.exception.OnboardingCallAlreadyBookedException;
 import com.narturebelle.exception.OnboardingCallSlotNotAvailableException;
 import com.narturebelle.model.OnboardingCall;
 import com.narturebelle.model.OnboardingCallSlot;
+import com.narturebelle.model.OnboardingCallbackRequest;
 import com.narturebelle.model.OnboardingIntake;
 import com.narturebelle.model.SlotStatus;
 import com.narturebelle.repository.OnboardingCallRepository;
 import com.narturebelle.repository.OnboardingCallSlotRepository;
+import com.narturebelle.repository.OnboardingCallbackRequestRepository;
 import com.narturebelle.repository.OnboardingIntakeRepository;
 import com.narturebelle.security.AuditService;
 import org.springframework.stereotype.Service;
@@ -26,15 +29,18 @@ public class OnboardingService {
     private final OnboardingIntakeRepository onboardingIntakeRepository;
     private final OnboardingCallSlotRepository onboardingCallSlotRepository;
     private final OnboardingCallRepository onboardingCallRepository;
+    private final OnboardingCallbackRequestRepository onboardingCallbackRequestRepository;
     private final AuditService auditService;
 
     public OnboardingService(OnboardingIntakeRepository onboardingIntakeRepository,
                               OnboardingCallSlotRepository onboardingCallSlotRepository,
                               OnboardingCallRepository onboardingCallRepository,
+                              OnboardingCallbackRequestRepository onboardingCallbackRequestRepository,
                               AuditService auditService) {
         this.onboardingIntakeRepository = onboardingIntakeRepository;
         this.onboardingCallSlotRepository = onboardingCallSlotRepository;
         this.onboardingCallRepository = onboardingCallRepository;
+        this.onboardingCallbackRequestRepository = onboardingCallbackRequestRepository;
         this.auditService = auditService;
     }
 
@@ -94,6 +100,20 @@ public class OnboardingService {
         auditService.record("ONBOARDING_CALL_BOOKED", "ONBOARDING_CALL", String.valueOf(saved.getId()),
                 "User booked an onboarding call");
         return saved;
+    }
+
+    public OnboardingCallbackRequest requestCallback(Long userId, CreateCallbackRequestRequest req) {
+        OnboardingCallbackRequest request = new OnboardingCallbackRequest();
+        request.setUserId(userId);
+        request.setNote(req.getNote());
+        OnboardingCallbackRequest saved = onboardingCallbackRequestRepository.save(request);
+        auditService.record("ONBOARDING_CALLBACK_REQUESTED", "ONBOARDING_CALLBACK_REQUEST", String.valueOf(saved.getId()),
+                "User asked to be called back for onboarding (no open slots)");
+        return saved;
+    }
+
+    public List<OnboardingCallbackRequest> listCallbackRequests() {
+        return onboardingCallbackRequestRepository.findAllByOrderByCreatedAtDesc();
     }
 
     public List<OnboardingCallSlot> createCallSlots(CreateOnboardingCallSlotsRequest req) {

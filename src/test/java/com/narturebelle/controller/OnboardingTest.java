@@ -9,6 +9,7 @@ import com.narturebelle.model.User;
 import com.narturebelle.repository.ConsentRepository;
 import com.narturebelle.repository.OnboardingCallRepository;
 import com.narturebelle.repository.OnboardingCallSlotRepository;
+import com.narturebelle.repository.OnboardingCallbackRequestRepository;
 import com.narturebelle.repository.OnboardingIntakeRepository;
 import com.narturebelle.repository.UserRepository;
 import com.narturebelle.security.FirebaseTokenVerifier;
@@ -47,11 +48,13 @@ class OnboardingTest {
     @Autowired private OnboardingIntakeRepository onboardingIntakeRepository;
     @Autowired private OnboardingCallSlotRepository onboardingCallSlotRepository;
     @Autowired private OnboardingCallRepository onboardingCallRepository;
+    @Autowired private OnboardingCallbackRequestRepository onboardingCallbackRequestRepository;
 
     @MockBean private FirebaseTokenVerifier firebaseTokenVerifier;
 
     @BeforeEach
     void setUp() throws Exception {
+        onboardingCallbackRequestRepository.deleteAll();
         onboardingCallRepository.deleteAll();
         onboardingCallSlotRepository.deleteAll();
         onboardingIntakeRepository.deleteAll();
@@ -234,6 +237,22 @@ class OnboardingTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"slots\":[{\"startAt\":\"" + LocalDateTime.now().plusDays(3)
                                 + "\",\"endAt\":\"" + LocalDateTime.now().plusDays(3).plusMinutes(30) + "\"}]}"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void requestCallback_createsRecord_visibleToAdminOnly() throws Exception {
+        mockMvc.perform(post("/api/v1/me/onboarding/callback-request")
+                        .header("Authorization", "Bearer " + TOKEN_A)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"note\":\"Please call after 6pm\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.note").value("Please call after 6pm"));
+
+        assertEquals(1, onboardingCallbackRequestRepository.findAllByOrderByCreatedAtDesc().size());
+
+        mockMvc.perform(get("/api/v1/admin/onboarding/callback-requests")
+                        .header("Authorization", "Bearer " + TOKEN_A))
                 .andExpect(status().isForbidden());
     }
 }

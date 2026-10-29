@@ -1,5 +1,6 @@
 package com.narturebelle.controller;
 
+import com.narturebelle.dto.CallbackRequestResponse;
 import com.narturebelle.dto.CreateOnboardingCallSlotsRequest;
 import com.narturebelle.dto.OnboardingCallSlotResponse;
 import com.narturebelle.service.OnboardingService;
@@ -25,5 +26,12 @@ public class AdminOnboardingController {
         List<OnboardingCallSlotResponse> slots = onboardingService.createCallSlots(req).stream()
                 .map(OnboardingCallSlotResponse::from).toList();
         return ResponseEntity.ok(slots);
+    }
+
+    @GetMapping("/callback-requests")
+    public ResponseEntity<List<CallbackRequestResponse>> listCallbackRequests() {
+        List<CallbackRequestResponse> requests = onboardingService.listCallbackRequests().stream()
+                .map(CallbackRequestResponse::from).toList();
+        return ResponseEntity.ok(requests);
     }
 }
