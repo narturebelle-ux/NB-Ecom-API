@@ -21,6 +21,9 @@ public class DataInitializer implements CommandLineRunner {
     private final FeatureFlagRepository featureFlagRepository;
     private final ConsentDocumentRepository consentDocumentRepository;
     private final CareProtocolStepRepository careProtocolStepRepository;
+    private final PlanRepository planRepository;
+    private final PlanVersionRepository planVersionRepository;
+    private final PlanEntitlementRepository planEntitlementRepository;
 
     public DataInitializer(ProductRepository productRepository,
                            ChecklistTaskRepository checklistTaskRepository,
@@ -29,7 +32,10 @@ public class DataInitializer implements CommandLineRunner {
                            DoctorSessionRepository doctorSessionRepository,
                            FeatureFlagRepository featureFlagRepository,
                            ConsentDocumentRepository consentDocumentRepository,
-                           CareProtocolStepRepository careProtocolStepRepository) {
+                           CareProtocolStepRepository careProtocolStepRepository,
+                           PlanRepository planRepository,
+                           PlanVersionRepository planVersionRepository,
+                           PlanEntitlementRepository planEntitlementRepository) {
         this.productRepository = productRepository;
         this.checklistTaskRepository = checklistTaskRepository;
         this.hospitalPartnerRepository = hospitalPartnerRepository;
@@ -38,6 +44,9 @@ public class DataInitializer implements CommandLineRunner {
         this.featureFlagRepository = featureFlagRepository;
         this.consentDocumentRepository = consentDocumentRepository;
         this.careProtocolStepRepository = careProtocolStepRepository;
+        this.planRepository = planRepository;
+        this.planVersionRepository = planVersionRepository;
+        this.planEntitlementRepository = planEntitlementRepository;
     }
 
     @Override
@@ -50,6 +59,7 @@ public class DataInitializer implements CommandLineRunner {
         seedFeatureFlags();
         seedConsentDocuments();
         seedCareProtocolSteps();
+        seedPlans();
     }
 
     /**
@@ -160,6 +170,79 @@ public class DataInitializer implements CommandLineRunner {
         doc.setEffectiveAt(LocalDateTime.now());
         doc.setActive(true);
         consentDocumentRepository.save(doc);
+    }
+
+    /**
+     * Normally seeded by V8__plans_orders_payments_entitlements.sql, but the test profile skips
+     * Flyway entirely (see seedFeatureFlags() above for the same pattern) — this keeps H2 in sync.
+     * Per-professional allocation/validity/copy are placeholders pending the real blueprint §5 numbers.
+     */
+    private void seedPlans() {
+        if (planRepository.count() > 0) return;
+
+        Long standardId = seedPlan(PlanCode.STANDARD, "Standard", 10);
+        Long careId = seedPlan(PlanCode.CARE, "Care", 20);
+        Long premiumId = seedPlan(PlanCode.PREMIUM, "Premium", 30);
+
+        Long standardVersionId = seedPlanVersion(standardId, new BigDecimal("9999.00"), new BigDecimal("11998.80"), 9,
+                List.of("9 total sessions across your assigned care team",
+                        "Gynecologist and nutritionist session allocation",
+                        "Session wallet with per-professional tracking"),
+                List.of("Hospital delivery charges", "Sessions beyond the allocated count"));
+        seedAllocation(standardVersionId, Role.GYNECOLOGIST, 5);
+        seedAllocation(standardVersionId, Role.NUTRITIONIST, 4);
+
+        Long careVersionId = seedPlanVersion(careId, new BigDecimal("14999.00"), new BigDecimal("17998.80"), 12,
+                List.of("12 total sessions across your assigned care team",
+                        "Gynecologist, nutritionist and lactation consultant session allocation",
+                        "Session wallet with per-professional tracking"),
+                List.of("Hospital delivery charges", "Sessions beyond the allocated count"));
+        seedAllocation(careVersionId, Role.GYNECOLOGIST, 5);
+        seedAllocation(careVersionId, Role.NUTRITIONIST, 4);
+        seedAllocation(careVersionId, Role.LACTATION_CONSULTANT, 3);
+
+        Long premiumVersionId = seedPlanVersion(premiumId, new BigDecimal("24999.00"), new BigDecimal("29998.80"), 16,
+                List.of("16 total sessions across your assigned care team",
+                        "Gynecologist, nutritionist, lactation consultant and postpartum physiotherapist session allocation",
+                        "Session wallet with per-professional tracking"),
+                List.of("Hospital delivery charges", "Sessions beyond the allocated count"));
+        seedAllocation(premiumVersionId, Role.GYNECOLOGIST, 6);
+        seedAllocation(premiumVersionId, Role.NUTRITIONIST, 4);
+        seedAllocation(premiumVersionId, Role.LACTATION_CONSULTANT, 3);
+        seedAllocation(premiumVersionId, Role.POSTPARTUM_PHYSIOTHERAPIST, 3);
+    }
+
+    private Long seedPlan(PlanCode code, String name, int displayOrder) {
+        Plan plan = new Plan();
+        plan.setCode(code);
+        plan.setName(name);
+        plan.setDisplayOrder(displayOrder);
+        return planRepository.save(plan).getId();
+    }
+
+    private Long seedPlanVersion(Long planId, BigDecimal oneTimePrice, BigDecimal installmentTotalPrice,
+                                  int totalSessions, List<String> inclusions, List<String> exclusions) {
+        PlanVersion planVersion = new PlanVersion();
+        planVersion.setPlanId(planId);
+        planVersion.setVersion(1);
+        planVersion.setActive(true);
+        planVersion.setOneTimePrice(oneTimePrice);
+        planVersion.setInstallmentTotalPrice(installmentTotalPrice);
+        planVersion.setInstallmentCount(2);
+        planVersion.setTotalSessions(totalSessions);
+        planVersion.setValidityDays(365);
+        planVersion.setEffectiveAt(LocalDateTime.now());
+        planVersion.setInclusions(inclusions);
+        planVersion.setExclusions(exclusions);
+        return planVersionRepository.save(planVersion).getId();
+    }
+
+    private void seedAllocation(Long planVersionId, Role professionalType, int sessionCount) {
+        PlanEntitlement allocation = new PlanEntitlement();
+        allocation.setPlanVersionId(planVersionId);
+        allocation.setProfessionalType(professionalType);
+        allocation.setSessionCount(sessionCount);
+        planEntitlementRepository.save(allocation);
     }
 
     private void seedProducts() {
