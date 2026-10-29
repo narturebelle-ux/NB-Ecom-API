@@ -452,5 +452,52 @@ GET /api/v1/records/{id}/access-log
 
 **Note on this section**: `GET /records/{id}` and `/{id}/shares`/`/access-log` return a plain 404 (no body/code) for a missing id, consistent with every other GET-by-id endpoint in this API (see Known Gaps) rather than the reserved `HEALTH_RECORD_NOT_FOUND`/`RECORD_SHARE_NOT_FOUND` codes, which exist in the error contract but aren't currently thrown anywhere. **Storage is Supabase Storage in `us-east-1`** (decision log #8) — same project/region as the DB, behind a `StorageProvider` interface so a later region move is contained. Real upload/download needs `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY` added to the stage/prod environment — until then those two calls will fail against a placeholder host while everything else (metadata CRUD, sharing, access log) works normally.
 
+## 11. Onboarding contract (Part A) — intake + onboarding-call booking
+
+Added after Phase 4, per the product owner's post-signup onboarding requirement. **Part A only**: intake and call booking. Documents/e-signature/the completion endpoint (`POST /me/onboarding/documents/sign`, `POST /me/onboarding/complete`) are **not built yet** — e-signing is specified to email the signed copy, which needs Phase 5's notification service; those land once Phase 5 ships. Stage and EDD are **not** part of this contract — they already go through the real Journey API (`POST/PATCH /me/journeys`), unchanged.
+
+**Every endpoint in this section requires `@RequireConsent`** (403 `CONSENT_REQUIRED` if pending), same gate as Journey/Dashboard — onboarding comes right after the consent step and collects health-adjacent data.
+
+**New error codes**, same `{code, message}` shape as §7-§10:
+| Code | Status | When |
+|---|---|---|
+| `ONBOARDING_CALL_SLOT_NOT_AVAILABLE` | 409 | Slot doesn't exist, isn't `OPEN`, or lost the booking race |
+| `ONBOARDING_CALL_ALREADY_BOOKED` | 409 | Caller already has an active onboarding call |
+
+**Status aggregate — `Logged in`:**
+```
+GET /api/v1/me/onboarding
+```
+```json
+{
+  "intake": { "id": 1, "firstPregnancy": true, "multiples": false,
+    "riskFactors": ["DIABETES", "THYROID"], "supportWanted": ["Nutrition guidance"],
+    "city": "Bengaluru", "language": "English", "preferredModality": "VIRTUAL",
+    "phone": "9999999999", "notes": "...", "createdAt": "...", "updatedAt": "..." } | null,
+  "call": { "id": 1, "slotId": 7, "scheduledStart": "...", "scheduledEnd": "...", "createdAt": "..." } | null,
+  "documentsSigned": false,
+  "completedAt": null
+}
+```
+`documentsSigned` and `completedAt` are **always `false`/`null` for now** — not a bug, Part B hasn't shipped. `riskFactors` is one of `HIGH_BLOOD_PRESSURE, DIABETES, THYROID, PREVIOUS_C_SECTION, PREVIOUS_COMPLICATIONS`; `preferredModality` reuses the existing `Modality` enum (`VIRTUAL`/`PHYSICAL`) from Phase 3. `supportWanted` is free-form strings, not a closed enum on this side — send whatever the UI's own option set is.
+
+**Intake — upsert, `Logged in`:**
+```
+PUT /api/v1/me/onboarding/intake   { "firstPregnancy", "multiples", "riskFactors": [...], "supportWanted": [...],
+                                      "city", "language", "preferredModality", "phone", "notes" }
+     -> same shape as the `intake` object above
+```
+All fields optional/nullable — call it with whatever's been answered so far; calling it again replaces the previous answers (not a merge/patch). No separate create vs. update call: the first `PUT` creates the row, every later `PUT` overwrites it.
+
+**Call booking:**
+```
+GET  /api/v1/onboarding/call-slots           -- OPEN, future-only, ordered
+POST /api/v1/me/onboarding/call   { "slotId" }
+```
+```json
+{ "id": 7, "startAt": "2026-11-02T10:00:00", "endAt": "2026-11-02T10:30:00", "status": "OPEN" }
+```
+At most one active call booking per user — booking a second one before cancelling the first is a 409 `ONBOARDING_CALL_ALREADY_BOOKED`. **No cancel/reschedule endpoint yet** — not in the proposed contract, and the roadmap note on "no coordinator portal" applies here the same way it did to Phase 3's provider portal. Slots are admin-seeded only (`POST /admin/onboarding/call-slots`, same shape as Phase 3's `POST /admin/providers/{id}/slots`) — there's no real coordinator-calendar integration behind this.
+
 ## Quick product/content endpoints (no auth needed, safe to build against today)
 `GET /api/v1/products`, `/api/v1/checklists`, `/api/v1/hospitals`, `/api/v1/doctor-sessions`, `/api/v1/nurse-companion/packages`, `/api/v1/features`, `/api/v1/consent-documents/current`, `/api/v1/plans`, `/api/v1/plans/{id}`, `/api/v1/providers`, `/api/v1/providers/{id}`, `/api/v1/providers/{id}/slots` — all public, all working, full details in Swagger.
