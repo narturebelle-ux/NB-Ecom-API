@@ -390,5 +390,67 @@ Status machine: `INVITED → DOCUMENTS_PENDING → UNDER_REVIEW → VERIFIED →
 
 **Note on this section's verification**: the public endpoints and the `@RequireVerified`/`EMAIL_NOT_VERIFIED` gate on `POST /bookings` were confirmed live against the real stage database. The admin-only onboarding chain (create → verify → book → complete) could not be re-verified live the same way — doing so would have required extracting the stage DB password to hand-grant an admin role, which this session's safety guardrail correctly blocked (same situation as Phase 2's finance endpoints). It's covered instead by `ProviderTest`/`BookingTest`, including a dedicated test proving that verifying a provider grants their role immediately on the next request with no new Firebase ID token required.
 
+## 10. Phase 4 contract — records vault & sharing
+
+Migration applied live against the real stage Supabase DB (V10, clean on top of V1-V9). **Not live-verified**: actual upload/download against a real bucket — `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY` don't exist yet for the stage/prod environments, so those two calls currently hit a placeholder host and will fail until the real Supabase Storage credentials are added (see the note at the end of this section). Everything else (CRUD, sharing, access log, authorization) is covered by the automated test suite (`RecordsTest`) using a mocked storage provider.
+
+**New error codes**, same `{code, message}` shape as §7-§9:
+| Code | Status | When |
+|---|---|---|
+| `VALIDATION_FAILED` | 400 | Disallowed mime type, oversized file, invalid/missing share target, bad expiry |
+| `RECORD_UPLOAD_NOT_CONFIRMED` | 409 | `POST /records` called before the file was actually uploaded to the signed URL |
+| `RECORD_NOT_ALLOWED` | 409 | Wrong-state action on a record |
+| `HEALTH_RECORD_NOT_FOUND` / `RECORD_SHARE_NOT_FOUND` | 404 | Reserved codes; current endpoints return a plain 404 body instead (see note below) |
+
+**Upload — two calls, in order, `Logged in + Verified`:**
+```
+POST /api/v1/records/upload-url   { "category", "fileName", "mimeType", "sizeBytes" }
+     -> { "objectPath", "uploadUrl", "token", "expiresAt" }     -- no DB row yet
+```
+Upload the file's bytes directly to `uploadUrl` (Supabase Storage's signed-upload mechanism — PUT/POST the raw bytes, not JSON), then:
+```
+POST /api/v1/records               { "category", "objectPath", "originalFileName", "mimeType", "sizeBytes" }
+     -> HealthRecordResponse        -- server verifies the object actually exists before creating the row
+```
+`category` is one of `SCAN, LAB_REPORT, PRESCRIPTION, DISCHARGE_SUMMARY, OTHER` (matches the UI's existing client-side enum). Allowed mime types and the max size are config, not hardcoded in this guide — current placeholder defaults: `application/pdf, image/jpeg, image/png, image/heic`, 25 MB. `HealthRecordResponse`:
+```json
+{
+  "id": 1, "userId": 7, "category": "LAB_REPORT", "originalFileName": "blood-work.pdf",
+  "mimeType": "application/pdf", "sizeBytes": 1048576, "status": "UPLOADED", "scanStatus": "NOT_SCANNED",
+  "createdAt": "2026-10-29T10:00:00", "updatedAt": "2026-10-29T10:00:00"
+}
+```
+**`scanStatus` is always `NOT_SCANNED` right now — there is no real malware scanning yet.** This is deliberately explicit, not hidden behind a `CLEAN` default.
+
+**List / view / edit / delete — owner, admin, or a provider the record is shared with:**
+```
+GET    /api/v1/records                    -- your own records, excludes deleted
+GET    /api/v1/records/shared-with-me     -- as a provider: records shared with you directly or via one of your bookings; [] if your account isn't a provider
+GET    /api/v1/records/{id}               -- owner / admin / shared provider; every view is audited, including your own
+PATCH  /api/v1/records/{id}                { "category" }     -- owner or admin only
+DELETE /api/v1/records/{id}                                   -- owner or admin only; soft delete, cascades share revocation
+POST   /api/v1/records/{id}/download-url                      -- owner / admin / shared provider -> { "downloadUrl", "expiresAt" }
+```
+
+**Sharing — owner or admin only:**
+```
+POST /api/v1/records/{id}/shares   { "shareTargetType": "PROVIDER", "targetProviderId", "expiresAt" }
+POST /api/v1/records/{id}/shares   { "shareTargetType": "BOOKING",  "targetBookingId",  "expiresAt" }
+GET  /api/v1/records/{id}/shares                                -- owner or admin only
+POST /api/v1/records/shares/{shareId}/revoke   { "reason"? }
+```
+Exactly one of `targetProviderId`/`targetBookingId` must be set, matching `shareTargetType`. A `BOOKING` share resolves live to whichever provider is currently assigned to that booking — if the booking's provider changes, so does who can see the record. `expiresAt` is always required (no indefinite shares), bounded by a placeholder max of 180 days. A `BOOKING` target must be a booking the caller themself owns (as the booking's user), or the request is rejected.
+
+**Access log — owner or admin ONLY, never a shared provider:**
+```
+GET /api/v1/records/{id}/access-log
+```
+```json
+[{ "id": 1, "recordId": 1, "recordName": "blood-work.pdf", "action": "VIEW", "actorRelationship": "OWNER", "occurredAt": "2026-10-29T10:05:00" }]
+```
+`action` is one of `UPLOAD, VIEW, DOWNLOAD, SHARE, REVOKE_SHARE, DELETE`. **`recordName` is the only place a filename appears in this entire log/sharing surface** — it's joined in at response time from the record itself, never stored on the log row. The underlying `record_access_events` table has no column for filename, mime type, size or category at all, by design (roadmap requirement: "no document names or health data in logs").
+
+**Note on this section**: `GET /records/{id}` and `/{id}/shares`/`/access-log` return a plain 404 (no body/code) for a missing id, consistent with every other GET-by-id endpoint in this API (see Known Gaps) rather than the reserved `HEALTH_RECORD_NOT_FOUND`/`RECORD_SHARE_NOT_FOUND` codes, which exist in the error contract but aren't currently thrown anywhere. **Storage is Supabase Storage in `us-east-1`** (decision log #8) — same project/region as the DB, behind a `StorageProvider` interface so a later region move is contained. Real upload/download needs `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY` added to the stage/prod environment — until then those two calls will fail against a placeholder host while everything else (metadata CRUD, sharing, access log) works normally.
+
 ## Quick product/content endpoints (no auth needed, safe to build against today)
 `GET /api/v1/products`, `/api/v1/checklists`, `/api/v1/hospitals`, `/api/v1/doctor-sessions`, `/api/v1/nurse-companion/packages`, `/api/v1/features`, `/api/v1/consent-documents/current`, `/api/v1/plans`, `/api/v1/plans/{id}`, `/api/v1/providers`, `/api/v1/providers/{id}`, `/api/v1/providers/{id}/slots` — all public, all working, full details in Swagger.

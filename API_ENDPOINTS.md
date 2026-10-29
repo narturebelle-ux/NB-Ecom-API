@@ -10,9 +10,9 @@ Access tiers, per the AUTH CONTRACT between UI and API:
 - **Admin** — valid token AND the caller holds any of the 6 `*_ADMIN` roles (`CLINIC_ADMIN`, `HOSPITAL_ADMIN`, `OPERATIONS_ADMIN`, `FINANCE_ADMIN`, `SECURITY_ADMIN`, `SUPER_ADMIN`) — updated from the original single `ADMIN` role in Phase 0's multi-role model.
 - **Dev-only** — bean doesn't exist at all when `SPRING_PROFILES_ACTIVE` is `prod` or `stage`; available in `default`/local/`test`.
 
-Errors are JSON `{"code": "...", "message": "..."}` — `401 UNAUTHENTICATED`, `403 EMAIL_NOT_VERIFIED`, `403 FORBIDDEN`, plus the Phase 0/1/2/3 codes in `UI_INTEGRATION_GUIDE.md` §7-9 (`VALIDATION_FAILED`, `CONSENT_REQUIRED`, `CONSENT_VERSION_OUTDATED`, `JOURNEY_ALREADY_ACTIVE`, `PLAN_NOT_FOUND`, `IDEMPOTENCY_KEY_CONFLICT`, `PAYMENT_NOT_ALLOWED`, `INVALID_WEBHOOK_SIGNATURE`, `REFUND_NOT_ALLOWED`, `PROVIDER_NOT_FOUND`, `PROVIDER_NOT_BOOKABLE`, `INVALID_PROVIDER_STATUS_TRANSITION`, `SLOT_NOT_AVAILABLE`, `NO_ENTITLEMENT_AVAILABLE`, `BOOKING_NOT_ALLOWED`, `FEEDBACK_NOT_ALLOWED`).
+Errors are JSON `{"code": "...", "message": "..."}` — `401 UNAUTHENTICATED`, `403 EMAIL_NOT_VERIFIED`, `403 FORBIDDEN`, plus the Phase 0/1/2/3/4 codes in `UI_INTEGRATION_GUIDE.md` §7-10 (`VALIDATION_FAILED`, `CONSENT_REQUIRED`, `CONSENT_VERSION_OUTDATED`, `JOURNEY_ALREADY_ACTIVE`, `PLAN_NOT_FOUND`, `IDEMPOTENCY_KEY_CONFLICT`, `PAYMENT_NOT_ALLOWED`, `INVALID_WEBHOOK_SIGNATURE`, `REFUND_NOT_ALLOWED`, `PROVIDER_NOT_FOUND`, `PROVIDER_NOT_BOOKABLE`, `INVALID_PROVIDER_STATUS_TRANSITION`, `SLOT_NOT_AVAILABLE`, `NO_ENTITLEMENT_AVAILABLE`, `BOOKING_NOT_ALLOWED`, `FEEDBACK_NOT_ALLOWED`, `RECORD_UPLOAD_NOT_CONFIRMED`, `RECORD_NOT_ALLOWED`).
 
-**This table predates Phase 0/1/2/3.** For `/api/v1/me`, consent, journey, dashboard, plans, orders, payments, entitlements, providers and bookings — see `UI_INTEGRATION_GUIDE.md` §7 (Phase 0/1), §8 (Phase 2) and §9 (Phase 3) for the full request/response contract. Only the original pre-pivot endpoints and the new Phase 2/3 rows are kept below.
+**This table predates Phase 0/1/2/3/4.** For `/api/v1/me`, consent, journey, dashboard, plans, orders, payments, entitlements, providers, bookings and records — see `UI_INTEGRATION_GUIDE.md` §7 (Phase 0/1), §8 (Phase 2), §9 (Phase 3) and §10 (Phase 4) for the full request/response contract. Only the original pre-pivot endpoints and the new Phase 2/3/4 rows are kept below.
 
 | Method | Path | Access | Notes |
 |---|---|---|---|
@@ -64,6 +64,18 @@ Errors are JSON `{"code": "...", "message": "..."}` — `401 UNAUTHENTICATED`, `
 | POST | `/api/v1/bookings/{id}/no-show` | Logged in + Verified | Phase 3 — party-restricted (can't self-report) |
 | PATCH | `/api/v1/bookings/{id}/note` | Logged in + Verified | Phase 3 — provider/admin, only after COMPLETED |
 | POST | `/api/v1/bookings/{id}/feedback` | Logged in + Verified | Phase 3 — booking's own user, only after COMPLETED, once |
+| POST | `/api/v1/records/upload-url` | Logged in + Verified | Phase 4 — issues a signed Supabase Storage upload URL, no DB row yet |
+| POST | `/api/v1/records` | Logged in + Verified | Phase 4 — confirms the upload (verifies the object exists) and creates the record |
+| GET | `/api/v1/records` | Logged in | Phase 4 — own records, excludes deleted |
+| GET | `/api/v1/records/shared-with-me` | Logged in | Phase 4 — as a provider, via direct or booking-scoped shares |
+| GET | `/api/v1/records/{id}` | Logged in (owner/admin/shared provider) | Phase 4 — every view is audited, including the owner's own |
+| PATCH | `/api/v1/records/{id}` | Logged in + Verified (owner/admin) | Phase 4 — category only |
+| DELETE | `/api/v1/records/{id}` | Logged in + Verified (owner/admin) | Phase 4 — soft delete, cascades share revocation |
+| POST | `/api/v1/records/{id}/download-url` | Logged in + Verified (owner/admin/shared provider) | Phase 4 |
+| POST | `/api/v1/records/{id}/shares` | Logged in + Verified (owner/admin) | Phase 4 — targets a provider or a booking, with an expiry |
+| GET | `/api/v1/records/{id}/shares` | Logged in (owner/admin) | Phase 4 |
+| POST | `/api/v1/records/shares/{shareId}/revoke` | Logged in + Verified (owner/admin) | Phase 4 |
+| GET | `/api/v1/records/{id}/access-log` | Logged in (owner/admin ONLY) | Phase 4 — never exposed to a shared provider |
 | `/api/v1/admin/**` | Admin | feature flags, order refunds, finance view, provider onboarding |
 
 Cart (pre-checkout) still isn't implemented — Phase 2 went straight from plan selection to order creation, no intermediate cart resource.
