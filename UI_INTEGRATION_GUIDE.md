@@ -463,6 +463,8 @@ Added after Phase 4, per the product owner's post-signup onboarding requirement.
 |---|---|---|
 | `ONBOARDING_CALL_SLOT_NOT_AVAILABLE` | 409 | Slot doesn't exist, isn't `OPEN`, or lost the booking race |
 | `ONBOARDING_CALL_ALREADY_BOOKED` | 409 | Caller already has an active onboarding call |
+| `ONBOARDING_DOCUMENT_NOT_FOUND` | 404 | Unknown `documentId` to `/documents/sign` |
+| `ONBOARDING_INCOMPLETE` | 409 | `/complete` called before every required step is satisfied — body includes `missingSteps` |
 
 **Status aggregate — `Logged in`:**
 ```
@@ -480,7 +482,7 @@ GET /api/v1/me/onboarding
   "completedAt": null
 }
 ```
-`documentsSigned` and `completedAt` are **always `false`/`null` for now** — not a bug, Part B hasn't shipped. `callbackRequestedAt` reflects the caller's most recent `POST /me/onboarding/callback-request`, if any — added so the UI doesn't have to track that locally. `riskFactors` is one of `HIGH_BLOOD_PRESSURE, DIABETES, THYROID, PREVIOUS_C_SECTION, PREVIOUS_COMPLICATIONS`; `preferredModality` reuses the existing `Modality` enum (`VIRTUAL`/`PHYSICAL`) from Phase 3. `supportWanted` is free-form strings, not a closed enum on this side — send whatever the UI's own option set is.
+**`documentsSigned` and `completedAt` are now real** (Part B has shipped) — `documentsSigned` is `true` once every currently-active onboarding document has a signature from this user (vacuously `true` if there are none active); `completedAt` is set only after a successful `POST /me/onboarding/complete`. `callbackRequestedAt` reflects the caller's most recent `POST /me/onboarding/callback-request`, if any — added so the UI doesn't have to track that locally. `riskFactors` is one of `HIGH_BLOOD_PRESSURE, DIABETES, THYROID, PREVIOUS_C_SECTION, PREVIOUS_COMPLICATIONS`; `preferredModality` reuses the existing `Modality` enum (`VIRTUAL`/`PHYSICAL`) from Phase 3. `supportWanted` is free-form strings, not a closed enum on this side — send whatever the UI's own option set is.
 
 **Intake — upsert, `Logged in`:**
 ```
@@ -505,6 +507,25 @@ At most one active call booking per user — booking a second one before cancell
 POST /api/v1/me/onboarding/callback-request   { "note"? }   -> { "id", "userId", "note", "createdAt" }
 ```
 Use this instead of a browser-only "ask for a call" state — it's a real server-side record (plus an audit event) a coordinator can act on via `GET /admin/onboarding/callback-requests` (admin-only, since there's no coordinator portal). `note` is optional, max 500 characters.
+
+**Documents, e-signature, completion (Part B) — `Logged in + Verified` for the mutating calls:**
+```
+GET  /api/v1/me/onboarding/documents
+     -> [{ "id", "type": "ONBOARDING_AGREEMENT", "version", "title", "bodyMarkdown", "effectiveAt", "signed" }]
+POST /api/v1/me/onboarding/documents/sign   { "documentId", "typedName" }
+     -> { "id", "documentId", "typedName", "signedAt" }
+POST /api/v1/me/onboarding/complete
+     -> { "completedAt" }
+```
+`bodyMarkdown` is **DRAFT placeholder text pending legal review** — render it as-is, don't treat it as final copy. Signing is idempotent: signing the same document twice just returns the original signature (same `typedName`/`signedAt`), it doesn't error or create a second record. Signing triggers an email to the user's registered address confirming the signed document — **no real email is sent yet** (no provider decided, same as Phase 5's EMAIL channel), so don't tell the user "check your inbox," something closer to "a copy will be emailed to you" is more honest right now.
+
+`POST /me/onboarding/complete` checks, in this order, and returns 409 `ONBOARDING_INCOMPLETE` with a `missingSteps` array (`"intake"`, `"onboarding call"`, `"payment"`, `"document signatures"`) naming everything still missing, not just the first one found:
+1. An intake has been saved (`PUT .../intake` called at least once).
+2. Either an onboarding call is booked **or** a callback request was made — a deliberate choice: a callback request is the sanctioned fallback when no slots exist, so it satisfies this step too, not just a booked call.
+3. At least one of the caller's orders is `PAID`.
+4. Every currently active onboarding document has this user's signature.
+
+Completion is idempotent — calling it again after success just returns the same `completedAt`, never a second completion or an error. Once `completedAt` is non-null (either from this call or from `GET /me/onboarding`), the user is onboarded — per decision log #12, that's the whole rule, no coordinator confirmation step.
 
 ## 12. Phase 5 contract — reminders & notifications
 

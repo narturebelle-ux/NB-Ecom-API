@@ -10,7 +10,7 @@ Access tiers, per the AUTH CONTRACT between UI and API:
 - **Admin** — valid token AND the caller holds any of the 6 `*_ADMIN` roles (`CLINIC_ADMIN`, `HOSPITAL_ADMIN`, `OPERATIONS_ADMIN`, `FINANCE_ADMIN`, `SECURITY_ADMIN`, `SUPER_ADMIN`) — updated from the original single `ADMIN` role in Phase 0's multi-role model.
 - **Dev-only** — bean doesn't exist at all when `SPRING_PROFILES_ACTIVE` is `prod` or `stage`; available in `default`/local/`test`.
 
-Errors are JSON `{"code": "...", "message": "..."}` — `401 UNAUTHENTICATED`, `403 EMAIL_NOT_VERIFIED`, `403 FORBIDDEN`, plus the Phase 0/1/2/3/4/5 and Onboarding codes in `UI_INTEGRATION_GUIDE.md` §7-12 (`VALIDATION_FAILED`, `CONSENT_REQUIRED`, `CONSENT_VERSION_OUTDATED`, `JOURNEY_ALREADY_ACTIVE`, `PLAN_NOT_FOUND`, `IDEMPOTENCY_KEY_CONFLICT`, `PAYMENT_NOT_ALLOWED`, `INVALID_WEBHOOK_SIGNATURE`, `REFUND_NOT_ALLOWED`, `PROVIDER_NOT_FOUND`, `PROVIDER_NOT_BOOKABLE`, `INVALID_PROVIDER_STATUS_TRANSITION`, `SLOT_NOT_AVAILABLE`, `NO_ENTITLEMENT_AVAILABLE`, `BOOKING_NOT_ALLOWED`, `FEEDBACK_NOT_ALLOWED`, `RECORD_UPLOAD_NOT_CONFIRMED`, `RECORD_NOT_ALLOWED`, `ONBOARDING_CALL_SLOT_NOT_AVAILABLE`, `ONBOARDING_CALL_ALREADY_BOOKED`).
+Errors are JSON `{"code": "...", "message": "..."}` — `401 UNAUTHENTICATED`, `403 EMAIL_NOT_VERIFIED`, `403 FORBIDDEN`, plus the Phase 0/1/2/3/4/5 and Onboarding codes in `UI_INTEGRATION_GUIDE.md` §7-12 (`VALIDATION_FAILED`, `CONSENT_REQUIRED`, `CONSENT_VERSION_OUTDATED`, `JOURNEY_ALREADY_ACTIVE`, `PLAN_NOT_FOUND`, `IDEMPOTENCY_KEY_CONFLICT`, `PAYMENT_NOT_ALLOWED`, `INVALID_WEBHOOK_SIGNATURE`, `REFUND_NOT_ALLOWED`, `PROVIDER_NOT_FOUND`, `PROVIDER_NOT_BOOKABLE`, `INVALID_PROVIDER_STATUS_TRANSITION`, `SLOT_NOT_AVAILABLE`, `NO_ENTITLEMENT_AVAILABLE`, `BOOKING_NOT_ALLOWED`, `FEEDBACK_NOT_ALLOWED`, `RECORD_UPLOAD_NOT_CONFIRMED`, `RECORD_NOT_ALLOWED`, `ONBOARDING_CALL_SLOT_NOT_AVAILABLE`, `ONBOARDING_CALL_ALREADY_BOOKED`, `ONBOARDING_DOCUMENT_NOT_FOUND`, `ONBOARDING_INCOMPLETE`).
 
 **This table predates Phase 0/1/2/3/4/5.** For `/api/v1/me`, consent, journey, dashboard, plans, orders, payments, entitlements, providers, bookings, records, onboarding and reminders/notifications — see `UI_INTEGRATION_GUIDE.md` §7 (Phase 0/1), §8 (Phase 2), §9 (Phase 3), §10 (Phase 4), §11 (Onboarding) and §12 (Phase 5) for the full request/response contract. Only the original pre-pivot endpoints and the new Phase 2/3/4/5/Onboarding rows are kept below.
 
@@ -83,6 +83,9 @@ Errors are JSON `{"code": "...", "message": "..."}` — `401 UNAUTHENTICATED`, `
 | POST | `/api/v1/admin/onboarding/call-slots` | Admin | Onboarding Part A — seeds call slots; no real coordinator-calendar integration |
 | POST | `/api/v1/me/onboarding/callback-request` | Logged in + Consent | Onboarding Part A — fallback when no call slots exist |
 | GET | `/api/v1/admin/onboarding/callback-requests` | Admin | Onboarding Part A — for a coordinator to act on |
+| GET | `/api/v1/me/onboarding/documents` | Logged in + Consent | Onboarding Part B — DRAFT text pending legal review |
+| POST | `/api/v1/me/onboarding/documents/sign` | Logged in + Verified | Onboarding Part B — idempotent re-sign |
+| POST | `/api/v1/me/onboarding/complete` | Logged in + Verified | Onboarding Part B — idempotent; 409 lists missing steps |
 | GET | `/api/v1/me/reminders` | Logged in | Phase 5 — ACTIVE only, server-generated |
 | POST | `/api/v1/me/reminders/{id}/dismiss` | Logged in | Phase 5 — 403 if it isn't yours |
 | GET | `/api/v1/me/notification-preferences` | Logged in | Phase 5 — IN_APP defaults on, others off |
