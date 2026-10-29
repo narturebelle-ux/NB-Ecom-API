@@ -24,6 +24,7 @@ public class DataInitializer implements CommandLineRunner {
     private final PlanRepository planRepository;
     private final PlanVersionRepository planVersionRepository;
     private final PlanEntitlementRepository planEntitlementRepository;
+    private final PayoutRateRepository payoutRateRepository;
 
     public DataInitializer(ProductRepository productRepository,
                            ChecklistTaskRepository checklistTaskRepository,
@@ -35,7 +36,8 @@ public class DataInitializer implements CommandLineRunner {
                            CareProtocolStepRepository careProtocolStepRepository,
                            PlanRepository planRepository,
                            PlanVersionRepository planVersionRepository,
-                           PlanEntitlementRepository planEntitlementRepository) {
+                           PlanEntitlementRepository planEntitlementRepository,
+                           PayoutRateRepository payoutRateRepository) {
         this.productRepository = productRepository;
         this.checklistTaskRepository = checklistTaskRepository;
         this.hospitalPartnerRepository = hospitalPartnerRepository;
@@ -47,6 +49,7 @@ public class DataInitializer implements CommandLineRunner {
         this.planRepository = planRepository;
         this.planVersionRepository = planVersionRepository;
         this.planEntitlementRepository = planEntitlementRepository;
+        this.payoutRateRepository = payoutRateRepository;
     }
 
     @Override
@@ -60,6 +63,7 @@ public class DataInitializer implements CommandLineRunner {
         seedConsentDocuments();
         seedCareProtocolSteps();
         seedPlans();
+        seedPayoutRates();
     }
 
     /**
@@ -243,6 +247,23 @@ public class DataInitializer implements CommandLineRunner {
         allocation.setProfessionalType(professionalType);
         allocation.setSessionCount(sessionCount);
         planEntitlementRepository.save(allocation);
+    }
+
+    /**
+     * Normally seeded by V9__providers_booking_sessions.sql, but the test profile skips Flyway
+     * entirely (see seedFeatureFlags() above for the same pattern) — this keeps H2 in sync.
+     * Amounts are placeholder figures pending a real payout rate decision.
+     */
+    private void seedPayoutRates() {
+        if (payoutRateRepository.count() > 0) return;
+
+        for (Role professionalType : List.of(Role.GYNECOLOGIST, Role.NUTRITIONIST, Role.LACTATION_CONSULTANT,
+                Role.PEDIATRICIAN, Role.POSTPARTUM_PHYSIOTHERAPIST, Role.CLINICAL_PSYCHOLOGIST, Role.REGISTERED_NURSE)) {
+            PayoutRate rate = new PayoutRate();
+            rate.setProfessionalType(professionalType);
+            rate.setAmount(new BigDecimal("500.00"));
+            payoutRateRepository.save(rate);
+        }
     }
 
     private void seedProducts() {
