@@ -5,16 +5,24 @@ import com.narturebelle.dto.CallbackRequestResponse;
 import com.narturebelle.dto.CreateCallbackRequestRequest;
 import com.narturebelle.dto.OnboardingCallResponse;
 import com.narturebelle.dto.OnboardingCallSlotResponse;
+import com.narturebelle.dto.OnboardingCompletionResponse;
+import com.narturebelle.dto.OnboardingDocumentResponse;
+import com.narturebelle.dto.OnboardingDocumentSignatureResponse;
 import com.narturebelle.dto.OnboardingIntakeResponse;
 import com.narturebelle.dto.OnboardingStatusResponse;
+import com.narturebelle.dto.SignOnboardingDocumentRequest;
 import com.narturebelle.dto.UpsertOnboardingIntakeRequest;
 import com.narturebelle.exception.UserProfileNotFoundException;
 import com.narturebelle.model.OnboardingCall;
 import com.narturebelle.model.OnboardingCallbackRequest;
+import com.narturebelle.model.OnboardingCompletion;
+import com.narturebelle.model.OnboardingDocument;
+import com.narturebelle.model.OnboardingDocumentSignature;
 import com.narturebelle.model.OnboardingIntake;
 import com.narturebelle.security.AuthorizationService;
 import com.narturebelle.security.FirebaseUserPrincipal;
 import com.narturebelle.security.RequireConsent;
+import com.narturebelle.security.RequireVerified;
 import com.narturebelle.service.OnboardingService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -40,8 +48,11 @@ public class OnboardingController {
         OnboardingIntakeResponse intake = onboardingService.findIntake(userId).map(OnboardingIntakeResponse::from).orElse(null);
         OnboardingCallResponse call = onboardingService.findCall(userId).map(OnboardingCallResponse::from).orElse(null);
         java.time.LocalDateTime callbackRequestedAt = onboardingService.findLatestCallbackRequest(userId)
-                .map(com.narturebelle.model.OnboardingCallbackRequest::getCreatedAt).orElse(null);
-        return ResponseEntity.ok(OnboardingStatusResponse.of(intake, call, callbackRequestedAt, false, null));
+                .map(OnboardingCallbackRequest::getCreatedAt).orElse(null);
+        boolean documentsSigned = onboardingService.allActiveDocumentsSigned(userId);
+        java.time.LocalDateTime completedAt = onboardingService.findCompletion(userId)
+                .map(OnboardingCompletion::getCompletedAt).orElse(null);
+        return ResponseEntity.ok(OnboardingStatusResponse.of(intake, call, callbackRequestedAt, documentsSigned, completedAt));
     }
 
     @RequireConsent
@@ -75,6 +86,34 @@ public class OnboardingController {
         OnboardingCallbackRequest request = onboardingService.requestCallback(userId,
                 req != null ? req : new CreateCallbackRequestRequest());
         return ResponseEntity.ok(CallbackRequestResponse.from(request));
+    }
+
+    @RequireConsent
+    @GetMapping("/api/v1/me/onboarding/documents")
+    public ResponseEntity<List<OnboardingDocumentResponse>> documents() {
+        Long userId = requireUserId(authorizationService.currentPrincipal());
+        List<OnboardingDocumentResponse> documents = onboardingService.listActiveDocuments().stream()
+                .map(doc -> OnboardingDocumentResponse.from(doc, onboardingService.findSignature(userId, doc.getId()).isPresent()))
+                .toList();
+        return ResponseEntity.ok(documents);
+    }
+
+    @RequireConsent
+    @RequireVerified
+    @PostMapping("/api/v1/me/onboarding/documents/sign")
+    public ResponseEntity<OnboardingDocumentSignatureResponse> signDocument(@Valid @RequestBody SignOnboardingDocumentRequest req) {
+        Long userId = requireUserId(authorizationService.currentPrincipal());
+        OnboardingDocumentSignature signature = onboardingService.signDocument(userId, req);
+        return ResponseEntity.ok(OnboardingDocumentSignatureResponse.from(signature));
+    }
+
+    @RequireConsent
+    @RequireVerified
+    @PostMapping("/api/v1/me/onboarding/complete")
+    public ResponseEntity<OnboardingCompletionResponse> complete() {
+        Long userId = requireUserId(authorizationService.currentPrincipal());
+        OnboardingCompletion completion = onboardingService.complete(userId);
+        return ResponseEntity.ok(OnboardingCompletionResponse.from(completion));
     }
 
     private Long requireUserId(FirebaseUserPrincipal principal) {

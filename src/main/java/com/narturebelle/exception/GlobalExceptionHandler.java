@@ -198,6 +198,21 @@ public class GlobalExceptionHandler {
                 .body(Map.of("code", "ONBOARDING_CALL_ALREADY_BOOKED", "message", e.getMessage()));
     }
 
+    @ExceptionHandler(OnboardingIncompleteException.class)
+    public ResponseEntity<Map<String, Object>> handleOnboardingIncomplete(OnboardingIncompleteException e) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("code", "ONBOARDING_INCOMPLETE");
+        body.put("message", e.getMessage());
+        body.put("missingSteps", e.getMissingSteps());
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
+    }
+
+    @ExceptionHandler(OnboardingDocumentNotFoundException.class)
+    public ResponseEntity<Map<String, String>> handleOnboardingDocumentNotFound(OnboardingDocumentNotFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(Map.of("code", "ONBOARDING_DOCUMENT_NOT_FOUND", "message", e.getMessage()));
+    }
+
     /**
      * A required header (e.g. Idempotency-Key) is missing. Without this, Spring's
      * MissingRequestHeaderException would fall through to the 500 catch-all below instead of a 400 —

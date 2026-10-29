@@ -70,4 +70,15 @@ public class NotificationService {
             }
         }
     }
+
+    /** Transactional emails (e.g. "here's your signed document") are not reminders -- they don't
+     * create a dismissible Reminder row, and they bypass the EMAIL channel preference, since the
+     * user's own action (signing) is the real consent here, not a general notification opt-in.
+     * Still a NoOp today, same as every other EMAIL send until a real provider exists. */
+    public void sendTransactionalEmail(Long userId, String title, String body) {
+        NotificationChannel email = channels.get(NotificationChannelType.EMAIL);
+        if (email != null) {
+            email.send(userId, title, body);
+        }
+    }
 }

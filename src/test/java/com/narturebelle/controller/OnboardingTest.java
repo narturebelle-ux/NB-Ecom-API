@@ -10,6 +10,9 @@ import com.narturebelle.repository.ConsentRepository;
 import com.narturebelle.repository.OnboardingCallRepository;
 import com.narturebelle.repository.OnboardingCallSlotRepository;
 import com.narturebelle.repository.OnboardingCallbackRequestRepository;
+import com.narturebelle.repository.OnboardingCompletionRepository;
+import com.narturebelle.repository.OnboardingDocumentRepository;
+import com.narturebelle.repository.OnboardingDocumentSignatureRepository;
 import com.narturebelle.repository.OnboardingIntakeRepository;
 import com.narturebelle.repository.UserRepository;
 import com.narturebelle.security.FirebaseTokenVerifier;
@@ -26,14 +29,16 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.LocalDateTime;
 import java.util.Set;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/** Covers the Onboarding intake + call-slot-booking endpoints (Part A -- documents/completion land after Phase 5). */
+/** Covers the Onboarding intake, call-slot-booking, document-signing, and completion endpoints. */
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
@@ -49,11 +54,16 @@ class OnboardingTest {
     @Autowired private OnboardingCallSlotRepository onboardingCallSlotRepository;
     @Autowired private OnboardingCallRepository onboardingCallRepository;
     @Autowired private OnboardingCallbackRequestRepository onboardingCallbackRequestRepository;
+    @Autowired private OnboardingDocumentRepository onboardingDocumentRepository;
+    @Autowired private OnboardingDocumentSignatureRepository onboardingDocumentSignatureRepository;
+    @Autowired private OnboardingCompletionRepository onboardingCompletionRepository;
 
     @MockBean private FirebaseTokenVerifier firebaseTokenVerifier;
 
     @BeforeEach
     void setUp() throws Exception {
+        onboardingCompletionRepository.deleteAll();
+        onboardingDocumentSignatureRepository.deleteAll();
         onboardingCallbackRequestRepository.deleteAll();
         onboardingCallRepository.deleteAll();
         onboardingCallSlotRepository.deleteAll();
@@ -254,5 +264,126 @@ class OnboardingTest {
         mockMvc.perform(get("/api/v1/admin/onboarding/callback-requests")
                         .header("Authorization", "Bearer " + TOKEN_A))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void documents_listsActiveDocument_withSignedFlag() throws Exception {
+        mockMvc.perform(get("/api/v1/me/onboarding/documents").header("Authorization", "Bearer " + TOKEN_A))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", org.hamcrest.Matchers.hasSize(1)))
+                .andExpect(jsonPath("$[0].type").value("ONBOARDING_AGREEMENT"))
+                .andExpect(jsonPath("$[0].signed").value(false));
+    }
+
+    @Test
+    void signDocument_createsSignature_idempotentOnReSign() throws Exception {
+        Long documentId = onboardingDocumentRepository.findByActiveTrue().get(0).getId();
+
+        mockMvc.perform(post("/api/v1/me/onboarding/documents/sign")
+                        .header("Authorization", "Bearer " + TOKEN_A)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"documentId\":" + documentId + ",\"typedName\":\"Jane Doe\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.typedName").value("Jane Doe"));
+
+        assertEquals(1, onboardingDocumentSignatureRepository.findByUserId(userIdFor(TOKEN_A)).size());
+
+        // Re-signing is a no-op, not a second row or an error.
+        mockMvc.perform(post("/api/v1/me/onboarding/documents/sign")
+                        .header("Authorization", "Bearer " + TOKEN_A)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"documentId\":" + documentId + ",\"typedName\":\"Jane Doe Again\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.typedName").value("Jane Doe"));
+
+        assertEquals(1, onboardingDocumentSignatureRepository.findByUserId(userIdFor(TOKEN_A)).size());
+
+        mockMvc.perform(get("/api/v1/me/onboarding/documents").header("Authorization", "Bearer " + TOKEN_A))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].signed").value(true));
+    }
+
+    @Test
+    void signDocument_unknownDocument_returns404() throws Exception {
+        mockMvc.perform(post("/api/v1/me/onboarding/documents/sign")
+                        .header("Authorization", "Bearer " + TOKEN_A)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"documentId\":999999,\"typedName\":\"Jane Doe\"}"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("ONBOARDING_DOCUMENT_NOT_FOUND"));
+    }
+
+    @Test
+    void complete_missingEverything_returns409WithAllMissingSteps() throws Exception {
+        mockMvc.perform(post("/api/v1/me/onboarding/complete").header("Authorization", "Bearer " + TOKEN_A))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("ONBOARDING_INCOMPLETE"))
+                .andExpect(jsonPath("$.missingSteps", org.hamcrest.Matchers.containsInAnyOrder(
+                        "intake", "onboarding call", "payment", "document signatures")));
+    }
+
+    @Test
+    void complete_happyPath_withCallbackRequestInsteadOfCall_isIdempotent() throws Exception {
+        mockMvc.perform(put("/api/v1/me/onboarding/intake")
+                        .header("Authorization", "Bearer " + TOKEN_A)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"city\":\"Bengaluru\"}"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/v1/me/onboarding/callback-request")
+                        .header("Authorization", "Bearer " + TOKEN_A)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isOk());
+
+        String orderBody = mockMvc.perform(post("/api/v1/orders")
+                        .header("Authorization", "Bearer " + TOKEN_A)
+                        .header("Idempotency-Key", UUID.randomUUID().toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"planId\":1,\"paymentMode\":\"ONE_TIME\"}"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        Long orderId = Long.valueOf(orderBody.replaceAll(".*\"id\":(\\d+).*", "$1"));
+
+        String paymentBody = mockMvc.perform(post("/api/v1/payments/create")
+                        .header("Authorization", "Bearer " + TOKEN_A)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"orderId\":" + orderId + "}"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        Long paymentId = Long.valueOf(paymentBody.replaceAll(".*\"id\":(\\d+).*", "$1"));
+        mockMvc.perform(post("/api/v1/payments/" + paymentId + "/mock/succeed").header("Authorization", "Bearer " + TOKEN_A))
+                .andExpect(status().isOk());
+
+        Long documentId = onboardingDocumentRepository.findByActiveTrue().get(0).getId();
+        mockMvc.perform(post("/api/v1/me/onboarding/documents/sign")
+                        .header("Authorization", "Bearer " + TOKEN_A)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"documentId\":" + documentId + ",\"typedName\":\"Jane Doe\"}"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/v1/me/onboarding/complete").header("Authorization", "Bearer " + TOKEN_A))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.completedAt").exists());
+
+        assertEquals(1, onboardingCompletionRepository.count());
+        Long completionId = onboardingCompletionRepository.findByUserId(userIdFor(TOKEN_A)).orElseThrow().getId();
+
+        // Completing again must not create a second row -- same completion id, not a new one.
+        mockMvc.perform(post("/api/v1/me/onboarding/complete").header("Authorization", "Bearer " + TOKEN_A))
+                .andExpect(status().isOk());
+
+        assertEquals(1, onboardingCompletionRepository.count());
+        assertEquals(completionId, onboardingCompletionRepository.findByUserId(userIdFor(TOKEN_A)).orElseThrow().getId());
+
+        mockMvc.perform(get("/api/v1/me/onboarding").header("Authorization", "Bearer " + TOKEN_A))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.documentsSigned").value(true))
+                .andExpect(jsonPath("$.completedAt").exists());
+    }
+
+    private Long userIdFor(String token) {
+        return userRepository.findByFirebaseUid(token.equals(TOKEN_A) ? "uid-onboarding-a" : "uid-onboarding-unconsented")
+                .orElseThrow().getId();
     }
 }

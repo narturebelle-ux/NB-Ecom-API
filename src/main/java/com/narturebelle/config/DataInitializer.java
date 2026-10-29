@@ -26,6 +26,7 @@ public class DataInitializer implements CommandLineRunner {
     private final PlanEntitlementRepository planEntitlementRepository;
     private final PayoutRateRepository payoutRateRepository;
     private final OnboardingCallSlotRepository onboardingCallSlotRepository;
+    private final OnboardingDocumentRepository onboardingDocumentRepository;
 
     public DataInitializer(ProductRepository productRepository,
                            ChecklistTaskRepository checklistTaskRepository,
@@ -39,7 +40,8 @@ public class DataInitializer implements CommandLineRunner {
                            PlanVersionRepository planVersionRepository,
                            PlanEntitlementRepository planEntitlementRepository,
                            PayoutRateRepository payoutRateRepository,
-                           OnboardingCallSlotRepository onboardingCallSlotRepository) {
+                           OnboardingCallSlotRepository onboardingCallSlotRepository,
+                           OnboardingDocumentRepository onboardingDocumentRepository) {
         this.productRepository = productRepository;
         this.checklistTaskRepository = checklistTaskRepository;
         this.hospitalPartnerRepository = hospitalPartnerRepository;
@@ -53,6 +55,7 @@ public class DataInitializer implements CommandLineRunner {
         this.planEntitlementRepository = planEntitlementRepository;
         this.payoutRateRepository = payoutRateRepository;
         this.onboardingCallSlotRepository = onboardingCallSlotRepository;
+        this.onboardingDocumentRepository = onboardingDocumentRepository;
     }
 
     @Override
@@ -68,6 +71,7 @@ public class DataInitializer implements CommandLineRunner {
         seedPlans();
         seedPayoutRates();
         seedOnboardingCallSlots();
+        seedOnboardingDocuments();
     }
 
     /**
@@ -292,6 +296,24 @@ public class DataInitializer implements CommandLineRunner {
             }
             cursor = cursor.plusDays(1);
         }
+    }
+
+    /**
+     * Normally seeded by V15__onboarding_documents.sql, but the test profile skips Flyway entirely
+     * (see seedFeatureFlags() above for the same pattern) — this keeps H2 in sync with that seed data.
+     */
+    private void seedOnboardingDocuments() {
+        if (onboardingDocumentRepository.count() > 0) return;
+
+        OnboardingDocument document = new OnboardingDocument();
+        document.setType(OnboardingDocumentType.ONBOARDING_AGREEMENT);
+        document.setVersion(1);
+        document.setTitle("Onboarding Care Agreement");
+        document.setBodyMarkdown("# Onboarding Care Agreement (DRAFT)\n\n"
+                + "This is placeholder text pending legal review. Do not treat this as a final or binding document.");
+        document.setEffectiveAt(LocalDateTime.now());
+        document.setActive(true);
+        onboardingDocumentRepository.save(document);
     }
 
     private void seedProducts() {
