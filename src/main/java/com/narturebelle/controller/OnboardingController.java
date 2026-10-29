@@ -39,7 +39,9 @@ public class OnboardingController {
         Long userId = requireUserId(authorizationService.currentPrincipal());
         OnboardingIntakeResponse intake = onboardingService.findIntake(userId).map(OnboardingIntakeResponse::from).orElse(null);
         OnboardingCallResponse call = onboardingService.findCall(userId).map(OnboardingCallResponse::from).orElse(null);
-        return ResponseEntity.ok(OnboardingStatusResponse.of(intake, call, false, null));
+        java.time.LocalDateTime callbackRequestedAt = onboardingService.findLatestCallbackRequest(userId)
+                .map(com.narturebelle.model.OnboardingCallbackRequest::getCreatedAt).orElse(null);
+        return ResponseEntity.ok(OnboardingStatusResponse.of(intake, call, callbackRequestedAt, false, null));
     }
 
     @RequireConsent

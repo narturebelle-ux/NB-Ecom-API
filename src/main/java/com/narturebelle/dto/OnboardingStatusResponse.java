@@ -8,14 +8,17 @@ public class OnboardingStatusResponse {
 
     private OnboardingIntakeResponse intake;
     private OnboardingCallResponse call;
+    private LocalDateTime callbackRequestedAt;
     private boolean documentsSigned;
     private LocalDateTime completedAt;
 
     public static OnboardingStatusResponse of(OnboardingIntakeResponse intake, OnboardingCallResponse call,
-                                               boolean documentsSigned, LocalDateTime completedAt) {
+                                               LocalDateTime callbackRequestedAt, boolean documentsSigned,
+                                               LocalDateTime completedAt) {
         OnboardingStatusResponse dto = new OnboardingStatusResponse();
         dto.intake = intake;
         dto.call = call;
+        dto.callbackRequestedAt = callbackRequestedAt;
         dto.documentsSigned = documentsSigned;
         dto.completedAt = completedAt;
         return dto;
@@ -23,6 +26,7 @@ public class OnboardingStatusResponse {
 
     public OnboardingIntakeResponse getIntake() { return intake; }
     public OnboardingCallResponse getCall() { return call; }
+    public LocalDateTime getCallbackRequestedAt() { return callbackRequestedAt; }
     public boolean isDocumentsSigned() { return documentsSigned; }
     public LocalDateTime getCompletedAt() { return completedAt; }
 }

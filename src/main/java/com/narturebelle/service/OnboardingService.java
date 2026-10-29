@@ -116,6 +116,10 @@ public class OnboardingService {
         return onboardingCallbackRequestRepository.findAllByOrderByCreatedAtDesc();
     }
 
+    public Optional<OnboardingCallbackRequest> findLatestCallbackRequest(Long userId) {
+        return onboardingCallbackRequestRepository.findTopByUserIdOrderByCreatedAtDesc(userId);
+    }
+
     public List<OnboardingCallSlot> createCallSlots(CreateOnboardingCallSlotsRequest req) {
         return req.getSlots().stream().map(window -> {
             OnboardingCallSlot slot = new OnboardingCallSlot();
