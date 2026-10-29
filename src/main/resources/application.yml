@@ -53,6 +53,23 @@ payments:
   mock:
     webhook-secret: ${MOCK_PAYMENT_WEBHOOK_SECRET:dev-only-mock-webhook-secret-change-me}
 
+# Supabase Storage (Phase 4) — reuses the same Supabase project as the Postgres DB (same us-east-1
+# region, no new infra account). No defaults on these two: there's no safe degraded mode for
+# storage, unlike Firebase's ADC fallback chain, so fail fast exactly like DB_URL/DB_PASSWORD.
+supabase:
+  url: ${SUPABASE_URL}
+  service-role-key: ${SUPABASE_SERVICE_ROLE_KEY}
+  storage:
+    bucket: ${SUPABASE_STORAGE_BUCKET:health-records}
+
+# Records vault upload/sharing policy knobs — placeholder defaults, flagged in HANDOFF.md.
+records:
+  upload:
+    allowed-mime-types: ${RECORDS_ALLOWED_MIME_TYPES:application/pdf,image/jpeg,image/png,image/heic}
+    max-size-bytes: ${RECORDS_MAX_SIZE_BYTES:26214400}
+  share:
+    max-expiry-days: ${RECORDS_SHARE_MAX_EXPIRY_DAYS:180}
+
 # Logging Configuration
 logging:
   level:

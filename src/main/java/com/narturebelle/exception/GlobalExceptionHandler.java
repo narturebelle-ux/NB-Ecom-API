@@ -153,6 +153,39 @@ public class GlobalExceptionHandler {
                 .body(Map.of("code", "FEEDBACK_NOT_ALLOWED", "message", e.getMessage()));
     }
 
+    @ExceptionHandler(HealthRecordNotFoundException.class)
+    public ResponseEntity<Map<String, String>> handleHealthRecordNotFound(HealthRecordNotFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(Map.of("code", "HEALTH_RECORD_NOT_FOUND", "message", e.getMessage()));
+    }
+
+    @ExceptionHandler(RecordShareNotFoundException.class)
+    public ResponseEntity<Map<String, String>> handleRecordShareNotFound(RecordShareNotFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(Map.of("code", "RECORD_SHARE_NOT_FOUND", "message", e.getMessage()));
+    }
+
+    @ExceptionHandler(InvalidRecordRequestException.class)
+    public ResponseEntity<Map<String, Object>> handleInvalidRecordRequest(InvalidRecordRequestException e) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("code", "VALIDATION_FAILED");
+        body.put("message", e.getMessage());
+        body.put("fields", Map.of(e.getField(), e.getMessage()));
+        return ResponseEntity.badRequest().body(body);
+    }
+
+    @ExceptionHandler(RecordUploadNotConfirmedException.class)
+    public ResponseEntity<Map<String, String>> handleRecordUploadNotConfirmed(RecordUploadNotConfirmedException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(Map.of("code", "RECORD_UPLOAD_NOT_CONFIRMED", "message", e.getMessage()));
+    }
+
+    @ExceptionHandler(RecordNotAllowedException.class)
+    public ResponseEntity<Map<String, String>> handleRecordNotAllowed(RecordNotAllowedException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(Map.of("code", "RECORD_NOT_ALLOWED", "message", e.getMessage()));
+    }
+
     /**
      * A required header (e.g. Idempotency-Key) is missing. Without this, Spring's
      * MissingRequestHeaderException would fall through to the 500 catch-all below instead of a 400 —
