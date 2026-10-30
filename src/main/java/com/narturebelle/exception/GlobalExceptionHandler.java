@@ -225,6 +225,18 @@ public class GlobalExceptionHandler {
                 .body(Map.of("code", "VACCINE_SCHEDULE_ITEM_NOT_FOUND", "message", e.getMessage()));
     }
 
+    @ExceptionHandler(HospitalNotFoundException.class)
+    public ResponseEntity<Map<String, String>> handleHospitalNotFound(HospitalNotFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(Map.of("code", "HOSPITAL_NOT_FOUND", "message", e.getMessage()));
+    }
+
+    @ExceptionHandler(HospitalReferralNotFoundException.class)
+    public ResponseEntity<Map<String, String>> handleHospitalReferralNotFound(HospitalReferralNotFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(Map.of("code", "HOSPITAL_REFERRAL_NOT_FOUND", "message", e.getMessage()));
+    }
+
     @ExceptionHandler(InvalidChildRequestException.class)
     public ResponseEntity<Map<String, Object>> handleInvalidChildRequest(InvalidChildRequestException e) {
         Map<String, Object> body = new HashMap<>();
