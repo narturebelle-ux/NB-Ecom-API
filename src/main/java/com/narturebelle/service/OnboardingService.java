@@ -91,7 +91,11 @@ public class OnboardingService {
         intake.setRiskFactors(req.getRiskFactors() != null ? req.getRiskFactors() : java.util.Set.of());
         intake.setSupportWanted(req.getSupportWanted() != null ? req.getSupportWanted() : java.util.Set.of());
         intake.setCity(req.getCity());
-        intake.setLanguage(req.getLanguage());
+        List<String> languages = normaliseLanguages(req.getLanguages() != null && !req.getLanguages().isEmpty()
+                ? req.getLanguages()
+                : (req.getLanguage() != null ? List.of(req.getLanguage()) : List.of()));
+        intake.setLanguages(new ArrayList<>(languages));
+        intake.setLanguage(languages.isEmpty() ? null : languages.get(0));
         intake.setPreferredModality(req.getPreferredModality());
         intake.setPhone(req.getPhone());
         intake.setNotes(req.getNotes());
@@ -100,6 +104,19 @@ public class OnboardingService {
         auditService.record("ONBOARDING_INTAKE_SAVED", "ONBOARDING_INTAKE", String.valueOf(saved.getId()),
                 "User submitted onboarding intake");
         return saved;
+    }
+
+    /** Trimmed, blanks dropped, case-insensitive duplicates removed, her order kept. */
+    static List<String> normaliseLanguages(List<String> raw) {
+        List<String> result = new ArrayList<>();
+        for (String language : raw) {
+            if (language == null || language.isBlank()) continue;
+            String trimmed = language.trim();
+            if (result.stream().noneMatch(existing -> existing.equalsIgnoreCase(trimmed))) {
+                result.add(trimmed);
+            }
+        }
+        return result;
     }
 
     public List<OnboardingCallSlot> listOpenCallSlots() {

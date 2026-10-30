@@ -9,6 +9,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
@@ -295,6 +296,15 @@ public class GlobalExceptionHandler {
                 .body(Map.of("code", "CATALOG_ITEM_IN_USE", "message", e.getMessage()));
     }
 
+    @ExceptionHandler(MatchProfileIncompleteException.class)
+    public ResponseEntity<Map<String, Object>> handleMatchProfileIncomplete(MatchProfileIncompleteException e) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("code", "MATCH_PROFILE_INCOMPLETE");
+        body.put("message", e.getMessage());
+        body.put("missing", e.getMissing());
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
+    }
+
     @ExceptionHandler(InvalidChildRequestException.class)
     public ResponseEntity<Map<String, Object>> handleInvalidChildRequest(InvalidChildRequestException e) {
         Map<String, Object> body = new HashMap<>();
@@ -325,6 +335,15 @@ public class GlobalExceptionHandler {
         body.put("code", "VALIDATION_FAILED");
         body.put("message", "Invalid value for parameter: " + e.getName());
         body.put("fields", Map.of(e.getName(), "Invalid value: " + e.getValue()));
+        return ResponseEntity.badRequest().body(body);
+    }
+
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<Map<String, Object>> handleMissingParameter(MissingServletRequestParameterException e) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("code", "VALIDATION_FAILED");
+        body.put("message", "Missing required parameter: " + e.getParameterName());
+        body.put("fields", Map.of(e.getParameterName(), "This parameter is required."));
         return ResponseEntity.badRequest().body(body);
     }
 

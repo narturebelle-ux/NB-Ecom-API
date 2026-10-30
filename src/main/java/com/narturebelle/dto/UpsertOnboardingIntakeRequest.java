@@ -2,8 +2,10 @@ package com.narturebelle.dto;
 
 import com.narturebelle.model.Modality;
 import com.narturebelle.model.RiskFactor;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
+import java.util.List;
 import java.util.Set;
 
 public class UpsertOnboardingIntakeRequest {
@@ -13,7 +15,13 @@ public class UpsertOnboardingIntakeRequest {
     private Set<RiskFactor> riskFactors;
     private Set<@Size(max = 100) String> supportWanted;
     private String city;
+    /** Older clients: a single language. Ignored when {@link #languages} is sent. */
     private String language;
+
+    /** Preferred first; 1-10 entries. When omitted, [language] is used. */
+    @Size(max = 10)
+    private List<@NotBlank @Size(max = 50) String> languages;
+
     private Modality preferredModality;
     private String phone;
 
@@ -37,6 +45,9 @@ public class UpsertOnboardingIntakeRequest {
 
     public String getLanguage() { return language; }
     public void setLanguage(String language) { this.language = language; }
+
+    public List<String> getLanguages() { return languages; }
+    public void setLanguages(List<String> languages) { this.languages = languages; }
 
     public Modality getPreferredModality() { return preferredModality; }
     public void setPreferredModality(Modality preferredModality) { this.preferredModality = preferredModality; }
