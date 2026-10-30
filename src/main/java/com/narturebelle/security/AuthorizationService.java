@@ -3,6 +3,8 @@ package com.narturebelle.security;
 import com.narturebelle.model.Booking;
 import com.narturebelle.model.HealthRecord;
 import com.narturebelle.model.Provider;
+import com.narturebelle.model.ProviderStatus;
+import com.narturebelle.model.Role;
 import com.narturebelle.model.RecordAccessRelationship;
 import com.narturebelle.model.RecordShare;
 import com.narturebelle.repository.BookingRepository;
@@ -14,8 +16,10 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 /** Reusable ownership/identity checks — reuse requireSelfOrAdmin for future cart/order endpoints too. */
 @Component
@@ -122,4 +126,32 @@ public class AuthorizationService {
     }
 
     public record RecordAccessResult(RecordAccessRelationship relationship, Long matchedShareId) {}
+
+    private static final Set<Role> RULE_REVIEWER_PROVIDER_TYPES =
+            EnumSet.of(Role.GYNECOLOGIST, Role.NUTRITIONIST, Role.REGISTERED_NURSE);
+    private static final Set<ProviderStatus> VERIFIED_PROVIDER = EnumSet.of(ProviderStatus.VERIFIED, ProviderStatus.ACTIVE);
+
+    /**
+     * Who may approve or reject product health rules (product-owner decision, 2026-10-30): MEDICAL_REVIEWER
+     * staff, or a provider of type GYNECOLOGIST / NUTRITIONIST / REGISTERED_NURSE whose provider account is
+     * VERIFIED or ACTIVE -- the role alone isn't enough. Throws AccessDeniedException (-> 403) otherwise.
+     */
+    public RuleReviewer requireRuleReviewer() {
+        FirebaseUserPrincipal principal = currentPrincipal();
+        if (principal.userId() == null) {
+            throw new AccessDeniedException("You may not review product health rules.");
+        }
+        if (principal.roles() != null && principal.roles().contains(Role.MEDICAL_REVIEWER)) {
+            String name = principal.name() != null ? principal.name() : principal.email();
+            return new RuleReviewer(principal.userId(), name, Role.MEDICAL_REVIEWER.name());
+        }
+        return providerRepository.findByUserId(principal.userId())
+                .filter(p -> RULE_REVIEWER_PROVIDER_TYPES.contains(p.getProfessionalType()))
+                .filter(p -> VERIFIED_PROVIDER.contains(p.getStatus()))
+                .map(p -> new RuleReviewer(principal.userId(), p.getDisplayName(), p.getProfessionalType().name()))
+                .orElseThrow(() -> new AccessDeniedException("You may not review product health rules."));
+    }
+
+    /** role = MEDICAL_REVIEWER, or the reviewing provider's professional type. */
+    public record RuleReviewer(Long userId, String name, String role) {}
 }

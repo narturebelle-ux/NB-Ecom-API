@@ -137,6 +137,9 @@ public class CatalogAdminService {
         product.setCategory(req.getCategory());
         product.setKeyBenefits(new ArrayList<>(req.getKeyBenefits() != null ? req.getKeyBenefits() : java.util.List.of()));
         product.setTargetSymptoms(new ArrayList<>(req.getTargetSymptoms() != null ? req.getTargetSymptoms() : java.util.List.of()));
+        product.setTags(req.getTags() == null ? new java.util.HashSet<>() : req.getTags().stream()
+                .map(tag -> tag.trim().toLowerCase(java.util.Locale.ROOT))
+                .collect(java.util.stream.Collectors.toCollection(java.util.HashSet::new)));
         return product;
     }
 

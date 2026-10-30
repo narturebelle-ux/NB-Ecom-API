@@ -31,6 +31,11 @@ public class ProductRequest {
     @Size(max = 255) private String category;
     private List<@NotBlank String> keyBenefits = new ArrayList<>();
     private List<@NotBlank String> targetSymptoms = new ArrayList<>();
+    /** Lower-cased on save; referred to by product health rules (e.g. "high-sugar", "sugar-free"). */
+    private List<@NotBlank @Size(max = 50) String> tags = new ArrayList<>();
+
+    public List<String> getTags() { return tags; }
+    public void setTags(List<String> tags) { this.tags = tags; }
 
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }

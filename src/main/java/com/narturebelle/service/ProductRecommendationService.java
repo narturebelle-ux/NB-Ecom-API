@@ -8,6 +8,8 @@ import com.narturebelle.model.JourneyStatus;
 import com.narturebelle.model.NecessityTier;
 import com.narturebelle.model.PregnancyStage;
 import com.narturebelle.model.Product;
+import com.narturebelle.model.ProductHealthRule;
+import com.narturebelle.model.RuleEffect;
 import com.narturebelle.model.ProductRecommendationDismissal;
 import com.narturebelle.repository.JourneyRepository;
 import com.narturebelle.repository.ProductRecommendationDismissalRepository;
@@ -28,9 +30,10 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * Product recommendations (Phase 6) over the existing Product catalog. Reasons are non-clinical only
- * (stage, chosen category, budget) -- never Product.clinicalRationale, which has had no clinical review,
- * and never the onboarding intake's risk factors. SKIP-tier products are never recommended.
+ * Product recommendations (Phase 6) over the existing Product catalog. Base reasons are non-clinical
+ * (stage, chosen category, budget) -- never Product.clinicalRationale, which has had no clinical review.
+ * Health details shape results only through clinically APPROVED ProductHealthRules, and only for users
+ * with the HEALTH_DATA consent. SKIP-tier products are never recommended.
  */
 @Service
 public class ProductRecommendationService {
@@ -40,11 +43,15 @@ public class ProductRecommendationService {
     private final JourneyRepository journeyRepository;
     private final AuditService auditService;
     private final String commissionDisclosure;
+    private final HealthProfileService healthProfileService;
+    private final ProductHealthRuleService productHealthRuleService;
 
     public ProductRecommendationService(ProductRepository productRepository,
                                         ProductRecommendationDismissalRepository dismissalRepository,
                                         JourneyRepository journeyRepository,
                                         AuditService auditService,
+                                        HealthProfileService healthProfileService,
+                                        ProductHealthRuleService productHealthRuleService,
                                         @Value("${narturebelle.recommendations.commission-disclosure:"
                                                 + "NartureBelle may earn a commission if you buy through these recommendations. "
                                                 + "It never affects what we recommend.}") String commissionDisclosure) {
@@ -53,6 +60,8 @@ public class ProductRecommendationService {
         this.journeyRepository = journeyRepository;
         this.auditService = auditService;
         this.commissionDisclosure = commissionDisclosure;
+        this.healthProfileService = healthProfileService;
+        this.productHealthRuleService = productHealthRuleService;
     }
 
     public ProductRecommendationsResponse recommend(Long userId, String category, BigDecimal maxPrice, boolean includeDismissed) {
@@ -67,17 +76,41 @@ public class ProductRecommendationService {
                 .map(ProductRecommendationDismissal::getProductId)
                 .collect(Collectors.toSet());
 
+        // Health-aware rules: only with HEALTH_DATA consent + a health profile, and only APPROVED rules.
+        List<ProductHealthRule> rules = healthProfileService.forRecommendations(userId)
+                .map(profile -> productHealthRuleService.approvedFor(profile.getRiskFactors()))
+                .orElse(List.of());
+        Set<String> avoidTags = rules.stream().filter(r -> r.getEffect() == RuleEffect.AVOID)
+                .map(ProductHealthRule::getTag).collect(Collectors.toSet());
+        List<ProductHealthRule> preferRules = rules.stream().filter(r -> r.getEffect() == RuleEffect.PREFER).toList();
+
         List<ProductRecommendationResponse> items = productRepository.findByStage(stage).stream()
                 .filter(p -> p.getTier() != NecessityTier.SKIP)
                 .filter(p -> category == null || category.isBlank() || category.equalsIgnoreCase(p.getCategory()))
                 .filter(p -> maxPrice == null || p.getPrice().compareTo(maxPrice) <= 0)
                 .filter(p -> includeDismissed || !dismissed.contains(p.getId()))
-                // Essentials first, but the tier itself is never exposed.
-                .sorted(Comparator.comparing((Product p) -> p.getTier() == NecessityTier.MANDATORY ? 0 : 1)
+                // AVOID wins over PREFER: a product carrying any avoided tag is never recommended.
+                .filter(p -> p.getTags().stream().noneMatch(avoidTags::contains))
+                // Health-preferred first, then essentials, then price -- the tier itself is never exposed.
+                .sorted(Comparator.comparing((Product p) -> preferReasons(p, preferRules).isEmpty() ? 1 : 0)
+                        .thenComparing(p -> p.getTier() == NecessityTier.MANDATORY ? 0 : 1)
                         .thenComparing(Product::getPrice))
-                .map(p -> ProductRecommendationResponse.from(p, reasons(stage, category, maxPrice), dismissed.contains(p.getId())))
+                .map(p -> {
+                    List<String> why = new ArrayList<>(reasons(stage, category, maxPrice));
+                    why.addAll(preferReasons(p, preferRules));
+                    return ProductRecommendationResponse.from(p, why, dismissed.contains(p.getId()));
+                })
                 .toList();
         return ProductRecommendationsResponse.of(stage, commissionDisclosure, items);
+    }
+
+    /** The reviewed reason text of each PREFER rule whose tag this product carries, de-duplicated. */
+    private static List<String> preferReasons(Product product, List<ProductHealthRule> preferRules) {
+        return preferRules.stream()
+                .filter(rule -> product.getTags().contains(rule.getTag()))
+                .map(ProductHealthRule::getReason)
+                .distinct()
+                .toList();
     }
 
     /** Idempotent: dismissing twice keeps one row. */
