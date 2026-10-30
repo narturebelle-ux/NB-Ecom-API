@@ -273,10 +273,10 @@ Full request/response JSON (including the new error codes `ONBOARDING_DOCUMENT_N
 
 ## 13. Careers & ideas/feedback
 
-Product-owner requirement (relayed by the UI session): admins post/close roles, people apply with a résumé, and every application and every ideas/feedback message is emailed to admin@narturebelle.com "through our API". Contract in `UI_INTEGRATION_GUIDE.md` §14; migration V28; covered by `CareersTest`.
+Product-owner requirement (relayed by the UI session): admins post/close roles, people apply with a résumé, and every application and every ideas/feedback message is emailed to hello@narturebelle.com "through our API". Contract in `UI_INTEGRATION_GUIDE.md` §14; migration V28; covered by `CareersTest`.
 
 - **Résumés live in Postgres** (`job_application_resumes`, bytea, ≤4 MB, under Vercel's 4.5 MB request limit), not Supabase Storage: prod still has placeholder Supabase credentials, so storage uploads would fail there. Admins download through the API (audited); there is no signed URL.
-- **Email goes through `com.narturebelle.email.EmailSender`**: `ResendEmailSender` when `RESEND_API_KEY` is set, otherwise `LoggingEmailSender` (logs the subject, delivers nothing). A failed send never fails a submission; `adminNotifiedAt` records whether the admin email really went out. Config: `RESEND_API_KEY`, `EMAIL_FROM` (default `NartureBelle <no-reply@narturebelle.com>`), `CAREERS_ADMIN_EMAIL` (default `admin@narturebelle.com`).
+- **Email goes through `com.narturebelle.email.EmailSender`**: `ResendEmailSender` when `RESEND_API_KEY` is set, otherwise `LoggingEmailSender` (logs the subject, delivers nothing). A failed send never fails a submission; `adminNotifiedAt` records whether the admin email really went out. Config: `RESEND_API_KEY`, `EMAIL_FROM` (default `NartureBelle <no-reply@narturebelle.com>`), `CAREERS_ADMIN_EMAIL` (default `hello@narturebelle.com`; support and care use support-care@narturebelle.com, which the API does not send to).
 - **Spam control**: a honeypot field, magic-byte checks on the résumé, and an in-memory per-instance rate limiter (`RateLimiter`). `server.forward-headers-strategy: native` makes the client IP come from Cloud Run's `X-Forwarded-For`.
 
 **Open product-owner decision — retention:** applications and résumés are personal data, and nothing deletes them today. Decide how long to keep them (e.g. 12 months after the role closes) and whether rejected applicants' data goes sooner; then add a scheduled purge.
