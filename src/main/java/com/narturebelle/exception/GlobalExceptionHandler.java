@@ -213,6 +213,27 @@ public class GlobalExceptionHandler {
                 .body(Map.of("code", "ONBOARDING_DOCUMENT_NOT_FOUND", "message", e.getMessage()));
     }
 
+    @ExceptionHandler(ChildNotFoundException.class)
+    public ResponseEntity<Map<String, String>> handleChildNotFound(ChildNotFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(Map.of("code", "CHILD_NOT_FOUND", "message", e.getMessage()));
+    }
+
+    @ExceptionHandler(VaccineScheduleItemNotFoundException.class)
+    public ResponseEntity<Map<String, String>> handleVaccineScheduleItemNotFound(VaccineScheduleItemNotFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(Map.of("code", "VACCINE_SCHEDULE_ITEM_NOT_FOUND", "message", e.getMessage()));
+    }
+
+    @ExceptionHandler(InvalidChildRequestException.class)
+    public ResponseEntity<Map<String, Object>> handleInvalidChildRequest(InvalidChildRequestException e) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("code", "VALIDATION_FAILED");
+        body.put("message", e.getMessage());
+        body.put("fields", Map.of(e.getField(), e.getMessage()));
+        return ResponseEntity.badRequest().body(body);
+    }
+
     /**
      * A required header (e.g. Idempotency-Key) is missing. Without this, Spring's
      * MissingRequestHeaderException would fall through to the 500 catch-all below instead of a 400 —

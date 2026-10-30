@@ -27,6 +27,8 @@ public class DataInitializer implements CommandLineRunner {
     private final PayoutRateRepository payoutRateRepository;
     private final OnboardingCallSlotRepository onboardingCallSlotRepository;
     private final OnboardingDocumentRepository onboardingDocumentRepository;
+    private final VaccineScheduleVersionRepository vaccineScheduleVersionRepository;
+    private final VaccineScheduleItemRepository vaccineScheduleItemRepository;
 
     public DataInitializer(ProductRepository productRepository,
                            ChecklistTaskRepository checklistTaskRepository,
@@ -41,7 +43,9 @@ public class DataInitializer implements CommandLineRunner {
                            PlanEntitlementRepository planEntitlementRepository,
                            PayoutRateRepository payoutRateRepository,
                            OnboardingCallSlotRepository onboardingCallSlotRepository,
-                           OnboardingDocumentRepository onboardingDocumentRepository) {
+                           OnboardingDocumentRepository onboardingDocumentRepository,
+                           VaccineScheduleVersionRepository vaccineScheduleVersionRepository,
+                           VaccineScheduleItemRepository vaccineScheduleItemRepository) {
         this.productRepository = productRepository;
         this.checklistTaskRepository = checklistTaskRepository;
         this.hospitalPartnerRepository = hospitalPartnerRepository;
@@ -56,6 +60,8 @@ public class DataInitializer implements CommandLineRunner {
         this.payoutRateRepository = payoutRateRepository;
         this.onboardingCallSlotRepository = onboardingCallSlotRepository;
         this.onboardingDocumentRepository = onboardingDocumentRepository;
+        this.vaccineScheduleVersionRepository = vaccineScheduleVersionRepository;
+        this.vaccineScheduleItemRepository = vaccineScheduleItemRepository;
     }
 
     @Override
@@ -72,6 +78,7 @@ public class DataInitializer implements CommandLineRunner {
         seedPayoutRates();
         seedOnboardingCallSlots();
         seedOnboardingDocuments();
+        seedVaccineSchedule();
     }
 
     /**
@@ -314,6 +321,50 @@ public class DataInitializer implements CommandLineRunner {
         document.setEffectiveAt(LocalDateTime.now());
         document.setActive(true);
         onboardingDocumentRepository.save(document);
+    }
+
+    /**
+     * Normally seeded by V16__child_and_vaccinations.sql; same test-profile fallback as
+     * seedOnboardingDocuments() above. Keep the two lists identical.
+     */
+    private void seedVaccineSchedule() {
+        if (vaccineScheduleVersionRepository.count() > 0) return;
+
+        VaccineScheduleVersion version = new VaccineScheduleVersion();
+        version.setVersion(1);
+        version.setTitle("Reference childhood schedule (draft)");
+        version.setReviewStatus(ReviewStatus.PENDING_CLINICAL_REVIEW);
+        version.setEffectiveAt(LocalDateTime.now());
+        version.setActive(true);
+        Long versionId = vaccineScheduleVersionRepository.save(version).getId();
+
+        Object[][] doses = {
+                {"BCG", 0, "Birth"},
+                {"Hepatitis B (Birth Dose)", 0, "Birth"},
+                {"OPV (Birth Dose)", 0, "Birth"},
+                {"Pentavalent 1 (DTwP-HepB-Hib)", 42, "6 weeks"},
+                {"Rotavirus 1", 42, "6 weeks"},
+                {"PCV 1", 42, "6 weeks"},
+                {"Pentavalent 2", 70, "10 weeks"},
+                {"Rotavirus 2", 70, "10 weeks"},
+                {"PCV 2", 70, "10 weeks"},
+                {"Pentavalent 3", 98, "14 weeks"},
+                {"Rotavirus 3", 98, "14 weeks"},
+                {"PCV Booster", 274, "9 months"},
+                {"MMR 1", 274, "9 months"},
+                {"MMR 2", 457, "15 months"},
+                {"DTwP Booster 1", 487, "16 months"},
+                {"OPV Booster", 487, "16 months"},
+        };
+        for (int i = 0; i < doses.length; i++) {
+            VaccineScheduleItem item = new VaccineScheduleItem();
+            item.setScheduleVersionId(versionId);
+            item.setVaccineName((String) doses[i][0]);
+            item.setDueAgeDays((Integer) doses[i][1]);
+            item.setDueAgeLabel((String) doses[i][2]);
+            item.setSortOrder(i + 1);
+            vaccineScheduleItemRepository.save(item);
+        }
     }
 
     private void seedProducts() {
