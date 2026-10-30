@@ -55,6 +55,7 @@ public class OnboardingService {
     private final NotificationService notificationService;
     private final AuditService auditService;
     private final CoordinatorRepository coordinatorRepository;
+    private final HealthProfileService healthProfileService;
 
     public OnboardingService(OnboardingIntakeRepository onboardingIntakeRepository,
                               OnboardingCallSlotRepository onboardingCallSlotRepository,
@@ -67,7 +68,8 @@ public class OnboardingService {
                               UserRepository userRepository,
                               NotificationService notificationService,
                               AuditService auditService,
-                              CoordinatorRepository coordinatorRepository) {
+                              CoordinatorRepository coordinatorRepository,
+                              HealthProfileService healthProfileService) {
         this.onboardingIntakeRepository = onboardingIntakeRepository;
         this.onboardingCallSlotRepository = onboardingCallSlotRepository;
         this.onboardingCallRepository = onboardingCallRepository;
@@ -80,6 +82,7 @@ public class OnboardingService {
         this.notificationService = notificationService;
         this.auditService = auditService;
         this.coordinatorRepository = coordinatorRepository;
+        this.healthProfileService = healthProfileService;
     }
 
     public Optional<OnboardingIntake> findIntake(Long userId) {
@@ -92,9 +95,11 @@ public class OnboardingService {
             fresh.setUserId(userId);
             return fresh;
         });
-        intake.setFirstPregnancy(req.getFirstPregnancy());
-        intake.setMultiples(req.getMultiples());
-        intake.setRiskFactors(req.getRiskFactors() != null ? req.getRiskFactors() : java.util.Set.of());
+        // Older clients still send health details with the intake: route them to the health profile, which
+        // enforces the HEALTH_DATA consent (403 before anything is saved, since this runs first).
+        if (req.getFirstPregnancy() != null || req.getMultiples() != null || req.getRiskFactors() != null) {
+            healthProfileService.save(userId, req.getFirstPregnancy(), req.getMultiples(), req.getRiskFactors());
+        }
         intake.setSupportWanted(req.getSupportWanted() != null ? req.getSupportWanted() : java.util.Set.of());
         intake.setCity(req.getCity());
         List<String> languages = normaliseLanguages(req.getLanguages() != null && !req.getLanguages().isEmpty()
@@ -106,7 +111,7 @@ public class OnboardingService {
         intake.setPhone(req.getPhone());
         intake.setNotes(req.getNotes());
         OnboardingIntake saved = onboardingIntakeRepository.save(intake);
-        // Metadata intentionally carries no risk-factor/notes content -- only that an intake was saved.
+        // Metadata intentionally carries no notes content -- only that an intake was saved.
         auditService.record("ONBOARDING_INTAKE_SAVED", "ONBOARDING_INTAKE", String.valueOf(saved.getId()),
                 "User submitted onboarding intake");
         return saved;

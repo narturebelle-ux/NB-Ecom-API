@@ -50,15 +50,17 @@ public class ConsentService {
      * nothing to consent to yet, so nothing is blocked.
      */
     public void requireGranted(Long userId, ConsentDocumentType type) {
-        Optional<ConsentDocument> active = consentDocumentRepository.findByTypeAndActiveTrue(type);
-        if (active.isEmpty()) {
-            return;
-        }
-        boolean granted = userId != null && consentRepository.existsByUserIdAndDocumentTypeAndDocumentVersionAndRevokedAtIsNull(
-                userId, type, active.get().getVersion());
-        if (!granted) {
+        if (consentDocumentRepository.findByTypeAndActiveTrue(type).isPresent() && !isGranted(userId, type)) {
             throw new ConsentRequiredException(List.of(type.name()));
         }
+    }
+
+    /** Strict: true only if the user holds an unrevoked grant of the current active version. No document = not granted. */
+    public boolean isGranted(Long userId, ConsentDocumentType type) {
+        Optional<ConsentDocument> active = consentDocumentRepository.findByTypeAndActiveTrue(type);
+        return active.isPresent() && userId != null
+                && consentRepository.existsByUserIdAndDocumentTypeAndDocumentVersionAndRevokedAtIsNull(
+                        userId, type, active.get().getVersion());
     }
 
     public List<Consent> history(Long userId) {

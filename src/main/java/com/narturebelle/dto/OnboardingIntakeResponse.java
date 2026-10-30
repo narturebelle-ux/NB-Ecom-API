@@ -2,7 +2,6 @@ package com.narturebelle.dto;
 
 import com.narturebelle.model.Modality;
 import com.narturebelle.model.OnboardingIntake;
-import com.narturebelle.model.RiskFactor;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -10,10 +9,8 @@ import java.util.Set;
 
 public class OnboardingIntakeResponse {
 
+    // No health details here: they're in GET /me/health-profile.
     private Long id;
-    private Boolean firstPregnancy;
-    private Boolean multiples;
-    private Set<RiskFactor> riskFactors;
     private Set<String> supportWanted;
     private String city;
     private String language;
@@ -27,9 +24,6 @@ public class OnboardingIntakeResponse {
     public static OnboardingIntakeResponse from(OnboardingIntake intake) {
         OnboardingIntakeResponse dto = new OnboardingIntakeResponse();
         dto.id = intake.getId();
-        dto.firstPregnancy = intake.getFirstPregnancy();
-        dto.multiples = intake.getMultiples();
-        dto.riskFactors = intake.getRiskFactors();
         dto.supportWanted = intake.getSupportWanted();
         dto.city = intake.getCity();
         dto.language = intake.getLanguage();
@@ -43,9 +37,6 @@ public class OnboardingIntakeResponse {
     }
 
     public Long getId() { return id; }
-    public Boolean getFirstPregnancy() { return firstPregnancy; }
-    public Boolean getMultiples() { return multiples; }
-    public Set<RiskFactor> getRiskFactors() { return riskFactors; }
     public Set<String> getSupportWanted() { return supportWanted; }
     public String getCity() { return city; }
     public String getLanguage() { return language; }

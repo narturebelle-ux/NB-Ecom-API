@@ -20,15 +20,7 @@ public class OnboardingIntake {
     @Column(nullable = false, unique = true)
     private Long userId;
 
-    private Boolean firstPregnancy;
-
-    private Boolean multiples;
-
-    @ElementCollection(fetch = FetchType.EAGER)
-    @CollectionTable(name = "onboarding_intake_risk_factors", joinColumns = @JoinColumn(name = "intake_id"))
-    @Enumerated(EnumType.STRING)
-    @Column(name = "risk_factor")
-    private Set<RiskFactor> riskFactors = new HashSet<>();
+    // Health details (first pregnancy, multiples, risk factors) live in HealthProfile since V24.
 
     /** Free-form selections (e.g. "Nutrition guidance", "Mental health support") — kept as strings rather than a
      * closed enum since the UI's exact option set isn't part of this API's contract. */
@@ -84,15 +76,6 @@ public class OnboardingIntake {
 
     public Long getUserId() { return userId; }
     public void setUserId(Long userId) { this.userId = userId; }
-
-    public Boolean getFirstPregnancy() { return firstPregnancy; }
-    public void setFirstPregnancy(Boolean firstPregnancy) { this.firstPregnancy = firstPregnancy; }
-
-    public Boolean getMultiples() { return multiples; }
-    public void setMultiples(Boolean multiples) { this.multiples = multiples; }
-
-    public Set<RiskFactor> getRiskFactors() { return riskFactors; }
-    public void setRiskFactors(Set<RiskFactor> riskFactors) { this.riskFactors = riskFactors; }
 
     public Set<String> getSupportWanted() { return supportWanted; }
     public void setSupportWanted(Set<String> supportWanted) { this.supportWanted = supportWanted; }

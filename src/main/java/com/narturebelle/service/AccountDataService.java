@@ -55,6 +55,7 @@ public class AccountDataService {
     private final AccountDeletionRequestRepository accountDeletionRequestRepository;
     private final AuditService auditService;
     private final ObjectMapper objectMapper;
+    private final HealthProfileRepository healthProfileRepository;
 
     public AccountDataService(UserRepository userRepository,
                               ConsentRepository consentRepository,
@@ -80,7 +81,8 @@ public class AccountDataService {
                               ProductRecommendationDismissalRepository productRecommendationDismissalRepository,
                               AccountDeletionRequestRepository accountDeletionRequestRepository,
                               AuditService auditService,
-                              ObjectMapper objectMapper) {
+                              ObjectMapper objectMapper,
+                              HealthProfileRepository healthProfileRepository) {
         this.userRepository = userRepository;
         this.consentRepository = consentRepository;
         this.journeyRepository = journeyRepository;
@@ -106,6 +108,7 @@ public class AccountDataService {
         this.accountDeletionRequestRepository = accountDeletionRequestRepository;
         this.auditService = auditService;
         this.objectMapper = objectMapper;
+        this.healthProfileRepository = healthProfileRepository;
     }
 
     /**
@@ -143,6 +146,7 @@ public class AccountDataService {
         export.put("journeyStageEvents", journeys.stream()
                 .flatMap(j -> journeyStageEventRepository.findByJourneyIdOrderByOccurredAtAsc(j.getId()).stream()).toList());
         export.put("onboardingIntake", onboardingIntakeRepository.findByUserId(userId).orElse(null));
+        export.put("healthProfile", healthProfileRepository.findByUserId(userId).orElse(null));
         export.put("onboardingCall", onboardingCallRepository.findByUserId(userId).orElse(null));
         export.put("onboardingCallbackRequests", onboardingCallbackRequestRepository.findByUserIdOrderByCreatedAtDesc(userId));
         export.put("onboardingDocumentSignatures", onboardingDocumentSignatureRepository.findByUserId(userId));

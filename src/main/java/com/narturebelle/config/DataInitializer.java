@@ -118,7 +118,7 @@ public class DataInitializer implements CommandLineRunner {
     }
 
     /**
-     * Normally seeded by V5__consent.sql and V21__records_storage_consent.sql, but the test profile skips
+     * Normally seeded by V5__consent.sql, V21__records_storage_consent.sql and V24__health_profiles.sql, but the test profile skips
      * Flyway entirely (see seedFeatureFlags() above for the same pattern) — this keeps H2 in sync with that seed data.
      */
     private void seedConsentDocuments() {
@@ -130,6 +130,10 @@ public class DataInitializer implements CommandLineRunner {
                 "# Privacy Notice (DRAFT)\n\nThis is placeholder text pending legal review. Do not treat this as a final or binding document.");
         seedConsentDocument(ConsentDocumentType.RECORDS_STORAGE, 1, "Health Records Storage",
                 "# Health Records Storage (DRAFT)\n\nI agree to NartureBelle storing the documents I upload. "
+                        + "This is placeholder text pending legal review. Do not treat this as a final or binding document.");
+        seedConsentDocument(ConsentDocumentType.HEALTH_DATA, 1, "Health Details",
+                "# Health Details (DRAFT)\n\nI agree to NartureBelle storing the health details I share (such as first pregnancy, "
+                        + "multiples and risk factors) and using them to tailor my recommendations. "
                         + "This is placeholder text pending legal review. Do not treat this as a final or binding document.");
     }
 

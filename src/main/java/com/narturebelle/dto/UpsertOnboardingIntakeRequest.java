@@ -10,6 +10,8 @@ import java.util.Set;
 
 public class UpsertOnboardingIntakeRequest {
 
+    /** Transitional: health details belong in PUT /me/health-profile. If an older client still sends any of
+     * these three, they're written to the health profile -- which needs the HEALTH_DATA consent. */
     private Boolean firstPregnancy;
     private Boolean multiples;
     private Set<RiskFactor> riskFactors;

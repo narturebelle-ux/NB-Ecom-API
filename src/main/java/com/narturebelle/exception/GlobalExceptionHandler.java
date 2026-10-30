@@ -296,6 +296,12 @@ public class GlobalExceptionHandler {
                 .body(Map.of("code", "CATALOG_ITEM_IN_USE", "message", e.getMessage()));
     }
 
+    @ExceptionHandler(HealthProfileNotFoundException.class)
+    public ResponseEntity<Map<String, String>> handleHealthProfileNotFound(HealthProfileNotFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(Map.of("code", "HEALTH_PROFILE_NOT_FOUND", "message", e.getMessage()));
+    }
+
     @ExceptionHandler(CoordinatorNotFoundException.class)
     public ResponseEntity<Map<String, String>> handleCoordinatorNotFound(CoordinatorNotFoundException e) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)

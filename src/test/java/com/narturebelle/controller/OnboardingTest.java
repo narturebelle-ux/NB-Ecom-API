@@ -129,7 +129,13 @@ class OnboardingTest {
                                 + "\"preferredModality\":\"VIRTUAL\",\"phone\":\"9999999999\",\"notes\":\"first note\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.city").value("Bengaluru"))
-                .andExpect(jsonPath("$.riskFactors", org.hamcrest.Matchers.containsInAnyOrder("DIABETES", "THYROID")));
+                .andExpect(jsonPath("$.riskFactors").doesNotExist());
+
+        // Health details sent with the intake (older clients) land in the separate health profile.
+        mockMvc.perform(get("/api/v1/me/health-profile").header("Authorization", "Bearer " + TOKEN_A))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.riskFactors", org.hamcrest.Matchers.containsInAnyOrder("DIABETES", "THYROID")))
+                .andExpect(jsonPath("$.firstPregnancy").value(true));
 
         assertEquals(1, onboardingIntakeRepository.count());
 
