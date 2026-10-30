@@ -296,6 +296,12 @@ public class GlobalExceptionHandler {
                 .body(Map.of("code", "CATALOG_ITEM_IN_USE", "message", e.getMessage()));
     }
 
+    @ExceptionHandler(SessionRecommendationException.class)
+    public ResponseEntity<Map<String, String>> handleSessionRecommendation(SessionRecommendationException e) {
+        return ResponseEntity.status(e.getStatus())
+                .body(Map.of("code", e.getCode(), "message", e.getMessage()));
+    }
+
     @ExceptionHandler(ProductHealthRuleException.class)
     public ResponseEntity<Map<String, String>> handleProductHealthRule(ProductHealthRuleException e) {
         return ResponseEntity.status(e.getStatus())

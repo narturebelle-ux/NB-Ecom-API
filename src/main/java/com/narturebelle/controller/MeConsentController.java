@@ -100,12 +100,17 @@ public class MeConsentController {
             return ResponseEntity.notFound().build();
         }
 
-        Consent consent = active.get();
-        consent.setRevokedAt(LocalDateTime.now());
-        Consent saved = consentRepository.save(consent);
-
-        auditService.record("CONSENT_REVOKED", "Consent", String.valueOf(saved.getId()), null,
-                Map.of("documentType", documentType.name(), "documentVersion", saved.getDocumentVersion()));
+        // Revoking withdraws every version she still holds -- otherwise an older grant (e.g. HEALTH_DATA v1)
+        // would quietly keep counting after she said no.
+        LocalDateTime now = LocalDateTime.now();
+        Consent saved = null;
+        for (Consent consent : consentRepository.findByUserIdAndDocumentTypeAndRevokedAtIsNull(principal.userId(), documentType)) {
+            consent.setRevokedAt(now);
+            Consent revoked = consentRepository.save(consent);
+            if (revoked.getId().equals(active.get().getId())) saved = revoked;
+            auditService.record("CONSENT_REVOKED", "Consent", String.valueOf(revoked.getId()), null,
+                    Map.of("documentType", documentType.name(), "documentVersion", revoked.getDocumentVersion()));
+        }
 
         return ResponseEntity.ok(saved);
     }

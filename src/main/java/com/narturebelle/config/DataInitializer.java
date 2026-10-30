@@ -131,9 +131,11 @@ public class DataInitializer implements CommandLineRunner {
         seedConsentDocument(ConsentDocumentType.RECORDS_STORAGE, 1, "Health Records Storage",
                 "# Health Records Storage (DRAFT)\n\nI agree to NartureBelle storing the documents I upload. "
                         + "This is placeholder text pending legal review. Do not treat this as a final or binding document.");
-        seedConsentDocument(ConsentDocumentType.HEALTH_DATA, 1, "Health Details",
+        // HEALTH_DATA: v1 superseded by v2 (V26), which adds that her care professionals can see these details.
+        seedConsentDocument(ConsentDocumentType.HEALTH_DATA, 2, "Health Details",
                 "# Health Details (DRAFT)\n\nI agree to NartureBelle storing the health details I share (such as first pregnancy, "
-                        + "multiples and risk factors) and using them to tailor my recommendations. "
+                        + "multiples and risk factors) and using them to tailor my recommendations. I also agree that the care "
+                        + "professionals I book sessions with can see these details during my sessions. "
                         + "This is placeholder text pending legal review. Do not treat this as a final or binding document.");
     }
 

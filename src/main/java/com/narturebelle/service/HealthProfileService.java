@@ -55,14 +55,28 @@ public class HealthProfileService {
     }
 
     /**
-     * For product recommendations: only when the HEALTH_DATA consent is currently granted -- revoking it
-     * stops her health details being used, even though the saved profile stays hers to see or delete.
-     * Not audited per call; recommendations never return or log the profile itself.
+     * For her own product recommendations: any unrevoked HEALTH_DATA grant -- every version's wording covers
+     * tailoring her recommendations. Revoking stops her health details being used, though the saved profile
+     * stays hers to see or delete. Not audited per call; recommendations never return or log the profile.
      */
     public Optional<HealthProfile> forRecommendations(Long userId) {
-        if (!consentService.isGranted(userId, ConsentDocumentType.HEALTH_DATA)) {
+        if (!consentService.hasAnyGrant(userId, ConsentDocumentType.HEALTH_DATA)) {
             return Optional.empty();
         }
         return healthProfileRepository.findByUserId(userId);
+    }
+
+    /**
+     * For her assigned professional during a session: only under the CURRENT HEALTH_DATA version (v2+), whose
+     * wording says her care professionals can see these details -- a v1 grant never counts here. Audited.
+     */
+    public Optional<HealthProfile> forCareTeam(Long motherUserId, Long bookingId) {
+        if (!consentService.isGranted(motherUserId, ConsentDocumentType.HEALTH_DATA)) {
+            return Optional.empty();
+        }
+        Optional<HealthProfile> profile = healthProfileRepository.findByUserId(motherUserId);
+        profile.ifPresent(p -> auditService.record("HEALTH_PROFILE_VIEWED_BY_PROVIDER", "HEALTH_PROFILE", String.valueOf(p.getId()),
+                "Assigned professional viewed the health profile during a session", java.util.Map.of("bookingId", bookingId)));
+        return profile;
     }
 }

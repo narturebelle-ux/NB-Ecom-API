@@ -18,4 +18,9 @@ public interface ConsentRepository extends JpaRepository<Consent, Long> {
     /** Most recent non-revoked grant for a type, regardless of version — what "revoke" acts on. */
     Optional<Consent> findFirstByUserIdAndDocumentTypeAndRevokedAtIsNullOrderByGrantedAtDesc(
             Long userId, ConsentDocumentType documentType);
+
+    /** Every non-revoked grant of a type, any version. */
+    List<Consent> findByUserIdAndDocumentTypeAndRevokedAtIsNull(Long userId, ConsentDocumentType documentType);
+
+    boolean existsByUserIdAndDocumentTypeAndRevokedAtIsNull(Long userId, ConsentDocumentType documentType);
 }

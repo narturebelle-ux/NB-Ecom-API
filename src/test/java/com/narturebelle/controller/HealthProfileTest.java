@@ -75,7 +75,7 @@ class HealthProfileTest {
         Consent consent = new Consent();
         consent.setUserId(userId);
         consent.setDocumentType(type);
-        consent.setDocumentVersion(1);
+        consent.setDocumentVersion(type == ConsentDocumentType.HEALTH_DATA ? 2 : 1);
         consentRepository.save(consent);
     }
 

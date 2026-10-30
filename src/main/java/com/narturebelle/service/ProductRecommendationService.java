@@ -9,6 +9,7 @@ import com.narturebelle.model.NecessityTier;
 import com.narturebelle.model.PregnancyStage;
 import com.narturebelle.model.Product;
 import com.narturebelle.model.ProductHealthRule;
+import com.narturebelle.model.RiskFactor;
 import com.narturebelle.model.RuleEffect;
 import com.narturebelle.model.ProductRecommendationDismissal;
 import com.narturebelle.repository.JourneyRepository;
@@ -102,6 +103,52 @@ public class ProductRecommendationService {
                 })
                 .toList();
         return ProductRecommendationsResponse.of(stage, commissionDisclosure, items);
+    }
+
+    /** Her stage from the active journey, or null without one (or without an EDD while pregnant). */
+    public PregnancyStage currentStage(Long userId) {
+        return journeyRepository.findByUserIdAndStatusNot(userId, JourneyStatus.CLOSED).map(this::stageFor).orElse(null);
+    }
+
+    public record AvoidedProduct(Long productId, String name, String reason) {}
+
+    public record CareTeamSuggestions(List<ProductRecommendationResponse> items, List<AvoidedProduct> avoided) {}
+
+    /**
+     * What her professional sees while picking products in a session: products for her stage (every stage if
+     * unknown), approved rules applied only for the risk factors the professional is allowed to see -- pass an
+     * empty set when the health profile isn't visible, or the avoided list would itself reveal her conditions.
+     * AVOIDed products are listed separately with the rule's reason instead of disappearing. Her own
+     * dismissals don't apply; this is the professional's choice.
+     */
+    public CareTeamSuggestions careTeamSuggestions(PregnancyStage stage, Set<RiskFactor> visibleRiskFactors) {
+        List<ProductHealthRule> rules = productHealthRuleService.approvedFor(visibleRiskFactors);
+        List<ProductHealthRule> avoidRules = rules.stream().filter(r -> r.getEffect() == RuleEffect.AVOID).toList();
+        List<ProductHealthRule> preferRules = rules.stream().filter(r -> r.getEffect() == RuleEffect.PREFER).toList();
+
+        List<Product> products = (stage != null ? productRepository.findByStage(stage) : productRepository.findAll()).stream()
+                .filter(p -> p.getTier() != NecessityTier.SKIP)
+                .toList();
+
+        List<AvoidedProduct> avoided = new ArrayList<>();
+        List<ProductRecommendationResponse> items = new ArrayList<>();
+        products.stream()
+                .sorted(Comparator.comparing((Product p) -> preferReasons(p, preferRules).isEmpty() ? 1 : 0)
+                        .thenComparing(p -> p.getTier() == NecessityTier.MANDATORY ? 0 : 1)
+                        .thenComparing(Product::getPrice))
+                .forEach(p -> {
+                    String avoidReason = avoidRules.stream().filter(r -> p.getTags().contains(r.getTag()))
+                            .map(ProductHealthRule::getReason).findFirst().orElse(null);
+                    if (avoidReason != null) {
+                        avoided.add(new AvoidedProduct(p.getId(), p.getName(), avoidReason));
+                        return;
+                    }
+                    List<String> why = new ArrayList<>();
+                    if (stage != null) why.add("Matches her current stage: " + STAGE_LABELS.get(stage));
+                    why.addAll(preferReasons(p, preferRules));
+                    items.add(ProductRecommendationResponse.from(p, why, false));
+                });
+        return new CareTeamSuggestions(items, avoided);
     }
 
     /** The reviewed reason text of each PREFER rule whose tag this product carries, de-duplicated. */

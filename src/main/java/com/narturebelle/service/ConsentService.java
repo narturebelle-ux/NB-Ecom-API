@@ -63,6 +63,11 @@ public class ConsentService {
                         userId, type, active.get().getVersion());
     }
 
+    /** Any unrevoked grant of this type, whatever its version. Used where an older version's wording still covers the use. */
+    public boolean hasAnyGrant(Long userId, ConsentDocumentType type) {
+        return userId != null && consentRepository.existsByUserIdAndDocumentTypeAndRevokedAtIsNull(userId, type);
+    }
+
     public List<Consent> history(Long userId) {
         return consentRepository.findByUserIdOrderByGrantedAtDesc(userId);
     }
