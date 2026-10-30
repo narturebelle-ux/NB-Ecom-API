@@ -20,6 +20,8 @@ import com.narturebelle.security.AuditService;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.util.List;
 import java.util.Map;
@@ -34,16 +36,19 @@ public class PaymentService {
     private final PaymentProvider paymentProvider;
     private final EntitlementService entitlementService;
     private final AuditService auditService;
+    private final ReferralService referralService;
 
     public PaymentService(PaymentRepository paymentRepository, PaymentWebhookEventRepository paymentWebhookEventRepository,
                            OrderRepository orderRepository, PaymentProvider paymentProvider,
-                           EntitlementService entitlementService, AuditService auditService) {
+                           EntitlementService entitlementService, AuditService auditService,
+                           ReferralService referralService) {
         this.paymentRepository = paymentRepository;
         this.paymentWebhookEventRepository = paymentWebhookEventRepository;
         this.orderRepository = orderRepository;
         this.paymentProvider = paymentProvider;
         this.entitlementService = entitlementService;
         this.auditService = auditService;
+        this.referralService = referralService;
     }
 
     public Payment createPayment(Order order) {
@@ -120,6 +125,18 @@ public class PaymentService {
             order.setStatus(OrderStatus.PAID);
             orderRepository.save(order);
             auditService.record("ORDER_PAID", "Order", String.valueOf(order.getId()), null);
+            // Referral credit runs after this webhook commits, in its own transaction: a referral problem
+            // must never roll back a payment.
+            if (TransactionSynchronizationManager.isSynchronizationActive()) {
+                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        referralService.onOrderPaid(order);
+                    }
+                });
+            } else {
+                referralService.onOrderPaid(order);
+            }
         }
         entitlementService.grantForOrder(order);
     }
