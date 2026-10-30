@@ -94,9 +94,16 @@ Get-Content .env | ForEach-Object { if ($_ -match '^([^#=]+)=(.*)$') { Set-Item 
 $env:JAVA_HOME = "C:\Program Files\Java\jdk-21"
 .\gradlew bootRun
 ```
-Default port **8085** (`.env`'s `PORT` value). Health check: `GET http://localhost:8085/health/db` → `{"database":"ok"}`.
+Default port **8085** (`.env`'s `PORT` value). **Since 2026-10-30 the UI is built against `http://localhost:8080/api/v1`**, so start the API with
+`$env:PORT = "8080"` before `bootRun`. Health check: `GET http://localhost:8080/health/db` → `{"database":"ok"}`.
 
-**CORS:** `cors.allowed-origins` includes `http://localhost:*` (any local dev port) alongside the real domains — verified live with a preflight request from `http://localhost:4200` (Angular's default dev port): got back `Access-Control-Allow-Origin: http://localhost:4200`, `Access-Control-Allow-Credentials: true`. No action needed on the UI side; any localhost port works.
+**Sample data and profiles (2026-10-30):** outside the `prod` profile, `DataInitializer` seeds sample products, checklists, hospitals,
+nurse packages, doctor sessions, onboarding call slots and Joy Circle events. **Under `prod` it seeds none of these**, so on a fresh
+prod DB those lists are empty until content is added through the admin endpoints (§13.7). Versioned config is seeded everywhere:
+feature flags, consent documents, care protocol steps, plans, onboarding documents and the vaccine schedule.
+
+**CORS:** `cors.allowed-origins` includes `http://localhost:*` (any local dev port) alongside the real domains — verified live with a preflight request from `http://localhost:4200` (Angular's default dev port): got back `Access-Control-Allow-Origin: http://localhost:4200`, `Access-Control-Allow-Credentials: true`. No action needed on the UI side; any localhost port works. **`Content-Disposition` is exposed** (`Access-Control-Expose-Headers`, 2fa71d8),
+so the browser can read the `GET /me/export` filename.
 
 ## 5. Full endpoint reference
 
@@ -125,12 +132,15 @@ For live, interactive docs with a "try it out" button: run the app, open `http:/
 | GET | `/api/v1/users/me` | Logged in | own profile |
 | PUT | `/api/v1/users/me` | Logged in + Verified | updates own profile; changing `phone` resets `phoneVerified` to `false` until re-verified via `/auth/firebase` |
 | GET | `/api/v1/users/{id}` | Logged in (self) or Admin | 403 FORBIDDEN if `{id}` isn't the caller and the caller isn't ADMIN |
-| `/api/v1/admin/**` | Admin | reserved namespace — no concrete endpoints implemented yet |
+| `/api/v1/admin/**` | Admin (`*_ADMIN` role) | see §13.7 for the endpoints that now exist (catalog, referrals, Joy Circle events, deletion requests) |
 
 ## 6. Known gaps — don't build UI assuming these exist
 
-- **No cart/checkout/order endpoints exist at all.** The contract reserves "Logged in" for cart and "Logged in + Verified" for checkout/orders, but none of that is implemented yet — this is a products/content + lead-capture API today, not a functioning checkout flow.
-- **No admin endpoints exist** — `/api/v1/admin/**` is reserved and role-gated, but nothing is mapped under it yet.
+- **No product cart/ordering endpoints.** Plan orders and payments exist (§8, mock gateway until Phase 7). Product purchases do not,
+  so the UI's product basket is labelled as a demo.
+- ~~No admin endpoints exist~~. *Superseded 2026-10-30:* see §13.7. Providers, their credentials, service offerings and slots are
+  created through the Phase 3 admin endpoints (`/api/v1/admin/providers`, §9). A fresh DB has an empty care directory until an admin
+  adds real providers there.
 - **No deployed URL** — if the UI needs to point at something other than localhost, that infrastructure doesn't exist yet either.
 
 ## 7. Phase 0/1 contract — roles, consent, journey & dashboard
@@ -556,6 +566,102 @@ PUT /api/v1/me/notification-preferences/{channel}   { "enabled" }
  { "channel": "SMS", "enabled": false }, { "channel": "WHATSAPP", "enabled": false }]
 ```
 `channel` is `IN_APP, EMAIL, SMS, WHATSAPP`. **IN_APP defaults on, everything else defaults off** until the user explicitly enables it. **Enabling EMAIL/SMS/WHATSAPP changes nothing real right now** — no provider is wired in (decision log #9 is still blank), so those channels log intent server-side only. Don't build UI copy that implies a real email/SMS/WhatsApp message will be sent.
+
+## 13. Phase 6 contract — P1 expansion (child, referrals, Joy Circle, recommendations, export/deletion)
+
+> *Written 2026-10-30 by the UI agent, at the product owner's request, from the code at `firebase-setup` 43c0d60 (commits 2a4601a,
+> 9999f26, 848ac87, 05cffec, 2fa71d8, 43c0d60). API agent: please correct anything that's wrong.*
+
+Shared rules: every `/me/**` route needs a Bearer token **and** consent (403 `CONSENT_REQUIRED`). The exceptions are export and deletion (§13.5),
+which deliberately skip the consent check. Dates are `yyyy-MM-dd` and times are ISO `LocalDateTime`. Errors use the usual `{code, message}` shape.
+A resource owned by another user returns 404, not 403. **Feature flags** `childTracker`, `joyCircle` and `productRecommendations` are seeded **off**,
+and turning them on is the product owner's call.
+
+### 13.1 Child + vaccination tracker (2a4601a)
+| Method | Path | Body | Returns |
+|---|---|---|---|
+| GET | `/api/v1/me/children` | | `[Child]` |
+| POST | `/api/v1/me/children` | `{name* (≤255), dateOfBirth* (past or today), sex?}` | `Child` (200) |
+| PATCH | `/api/v1/me/children/{id}` | `{name?, dateOfBirth?, sex?}` | `Child` |
+| GET | `/api/v1/me/children/{id}/vaccinations` | | `{childId, schedule:{id, version (int), title, reviewStatus}, items:[VaccinationItem]}` |
+| PUT | `/api/v1/me/children/{id}/vaccinations/{scheduleItemId}` | `{givenAt* (past or today), givenWhere? (≤255)}` | `VaccinationItem` (idempotent upsert) |
+| DELETE | same path | | 204 (unmark) |
+
+`Child = {id, name, dateOfBirth, sex: FEMALE|MALE|UNDISCLOSED|null, createdAt}`.
+`VaccinationItem = {scheduleItemId, vaccineName, dueAgeDays, dueAgeLabel, dueDate, status, givenAt, givenWhere}`. `status` is `DONE` if recorded,
+otherwise `OVERDUE` if `dueDate` < today, `DUE` if within the next 30 days, else `UPCOMING`. The schedule is v1, `reviewStatus: PENDING_CLINICAL_REVIEW`.
+Errors: 404 `CHILD_NOT_FOUND`, 404 `VACCINE_SCHEDULE_ITEM_NOT_FOUND`. Guardian/family sharing is not built.
+
+### 13.2 Hospital referrals (9999f26)
+| Method | Path | Access | Body / Returns |
+|---|---|---|---|
+| POST | `/api/v1/me/hospital-referrals` | Logged in + Verified + consent | `{hospitalId*, note? (≤1000)}` → `Referral`. Idempotent: an open referral to the same hospital is returned as-is |
+| GET | `/api/v1/me/hospital-referrals` | Logged in + consent | `[Referral]` |
+
+`Referral = {id, code ("NB-" + 8 chars, no user id), hospitalId, hospitalName, status: REQUESTED|CONFIRMED, note, createdAt, confirmedAt}`.
+Error: 404 `HOSPITAL_NOT_FOUND`. `/api/v1/hospitals` is unchanged.
+
+### 13.3 Joy Circle — non-clinical community events (848ac87)
+| Method | Path | Access | Returns |
+|---|---|---|---|
+| GET | `/api/v1/joy-circle/events?includePast=false` | Public | `[Event]` (upcoming only by default) |
+| GET | `/api/v1/joy-circle/events/{id}` | Public | `Event` |
+| POST | `/api/v1/joy-circle/events/{id}/rsvp` | Logged in + consent | `Rsvp` (idempotent) |
+| DELETE | `/api/v1/joy-circle/events/{id}/rsvp` | Logged in + consent | 204 |
+| GET | `/api/v1/me/joy-circle/rsvps` | Logged in + consent | `[Rsvp]` |
+
+`Event = {id, title, description, hostName, hostBio, category, startsAt, endsAt, modality: VIRTUAL|PHYSICAL, location, capacity (null = unlimited),
+rsvpCount, spotsLeft (null if unlimited), status: SCHEDULED|CANCELLED, disclaimer}`.
+`Rsvp = {eventId, event: Event (with the updated rsvpCount/spotsLeft), joinUrl, rsvpAt}`. **`joinUrl` is never on the public Event.**
+Errors: 404 `EVENT_NOT_FOUND`, 409 `EVENT_FULL`, 409 `EVENT_NOT_OPEN` (cancelled or already started).
+
+### 13.4 Product recommendations (848ac87)
+| Method | Path | Returns |
+|---|---|---|
+| GET | `/api/v1/me/product-recommendations?category=&maxPrice=&includeDismissed=false` | `{stage, commissionDisclosure, items:[Recommendation]}` |
+| POST | `/api/v1/me/product-recommendations/{productId}/dismiss` | 204 |
+| DELETE | same path | 204 (undismiss) |
+
+`stage` comes from the active Journey: trimester 1/2/3 → `MONTH_3`/`MONTH_6`/`MONTH_9`, and postpartum/childcare → `BABY_CARE`. With no journey,
+`stage` is null and `items` is `[]`. `Recommendation = {productId, name, description, price, originalPrice, imageUrl, category, whyRecommended:[string], dismissed}`.
+There's no `tier`, and SKIP-tier products are never returned. `whyRecommended` is non-clinical (e.g. "Within your budget of ₹1,000").
+`clinicalRationale` is not exposed. Error: 404 `PRODUCT_NOT_FOUND`.
+
+### 13.5 Data export + account deletion request (848ac87) — no consent required
+| Method | Path | Returns |
+|---|---|---|
+| GET | `/api/v1/me/export` | JSON attachment `narturebelle-export-<yyyy-MM-dd>.json` with everything held for the user. Record files are not included, only their metadata |
+| POST | `/api/v1/me/deletion-request` | `{confirm: "DELETE"}` → `DeletionRequest` |
+| GET | `/api/v1/me/deletion-request` | `DeletionRequest`, or 404 `DELETION_REQUEST_NOT_FOUND` |
+| DELETE | `/api/v1/me/deletion-request` | 204. Cancels only while `REQUESTED` |
+
+`DeletionRequest = {id, status: REQUESTED|IN_PROGRESS|COMPLETED|REJECTED|CANCELLED, requestedAt, updatedAt}`. **Nothing is erased automatically.** An admin
+processes requests by hand, because retention periods are still a product-owner decision. Errors: 400 `VALIDATION_FAILED` (confirm ≠ "DELETE"),
+409 `DELETION_ALREADY_REQUESTED`, 409 `DELETION_NOT_CANCELLABLE` (already `IN_PROGRESS`), 404 `DELETION_REQUEST_NOT_FOUND`.
+
+### 13.6 `RECORDS_STORAGE` consent (43c0d60) — changes §7 and §10
+- `GET /api/v1/consent-documents/current` now returns a third document, `type: "RECORDS_STORAGE"` (version 1, DRAFT text). **Every document has
+  `required`**: `TERMS`/`PRIVACY` are `true` and `RECORDS_STORAGE` is `false`. Only `required: true` documents belong on the sign-up consent step.
+- Grant it with the usual `POST /api/v1/me/consents {documentType: "RECORDS_STORAGE", documentVersion: 1}`. It never appears in `/me` `pending` and never
+  triggers `@RequireConsent`.
+- **Enforced on `POST /records/upload-url` and `POST /records`:** without it, both return 403 `{code: "CONSENT_REQUIRED", pending: ["RECORDS_STORAGE"]}`.
+
+### 13.7 Admin endpoints (all `*_ADMIN`)
+| Method | Path | Notes |
+|---|---|---|
+| POST / PUT / DELETE | `/api/v1/admin/hospitals[/{id}]`, `/admin/products[/{id}]`, `/admin/checklists[/{id}]` | Bodies use the same fields as the public GET shapes. PUT is a full replacement. DELETE → 409 `CATALOG_ITEM_IN_USE` if referrals or dismissals point at the row. 404 `HOSPITAL_NOT_FOUND` / `PRODUCT_NOT_FOUND` / `CHECKLIST_TASK_NOT_FOUND` (05cffec) |
+| GET, POST `/{id}/confirm` | `/api/v1/admin/hospital-referrals` | list and confirm referrals |
+| POST, POST `/{id}/cancel` | `/api/v1/admin/joy-circle/events` | create (`{title, description, hostName, hostBio, category, startsAt, endsAt, modality, location, joinUrl, capacity}`) and cancel events |
+| GET, PATCH `/{id}` | `/api/v1/admin/deletion-requests` | list; `{status}` moves a request on. Bad moves → `INVALID_DELETION_STATUS_TRANSITION` |
+
+Required catalog fields: hospital `name`, `city`; product `name`, `price`, `stage`, `tier` (tier is used internally only, never shown
+to users); checklist `stage`, `testName`. *(Corrected by the API agent.)*
+
+Providers are **not** missing: create them with the Phase 3 endpoints under `/api/v1/admin/providers` (create → credentials → services →
+verify → status `ACTIVE` → slots; see §9). There's no admin UI for any of these yet.
+
+### 13.8 Not built in Phase 6
+The AI record plan (needs clinical governance), regional languages and capacity forecasting.
 
 ## Quick product/content endpoints (no auth needed, safe to build against today)
 `GET /api/v1/products`, `/api/v1/checklists`, `/api/v1/hospitals`, `/api/v1/doctor-sessions`, `/api/v1/nurse-companion/packages`, `/api/v1/features`, `/api/v1/consent-documents/current`, `/api/v1/plans`, `/api/v1/plans/{id}`, `/api/v1/providers`, `/api/v1/providers/{id}`, `/api/v1/providers/{id}/slots` — all public, all working, full details in Swagger.
