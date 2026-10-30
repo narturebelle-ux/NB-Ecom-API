@@ -1,0 +1,16 @@
+# Files never uploaded by `gcloud run deploy --source .` (secrets, build output, local junk).
+.git
+.gitignore
+.gcloudignore
+.gradle/
+build/
+bin/
+target/
+.idea/
+.vscode/
+.env
+.env.*
+*firebase-service-account*.json
+*.log
+hs_err_pid*
+replay_pid*
