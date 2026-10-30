@@ -712,6 +712,24 @@ votedByMe?, mine?, featureConsent? (only on your own)}`.
 **Admin (*_ADMIN):** `GET /api/v1/admin/ideas?status=` and `POST /api/v1/admin/ideas/{id}/status {status, impactNote}`.
 `impactNote` ("what changed", shown publicly) is required for IMPLEMENTED (`400 IMPACT_NOTE_REQUIRED`). The admin inbox is
 emailed when an idea is posted and when one first reaches the goal.
+## 16. Referral links & the free Premium reward
+
+Every member has a personal code. When **5 friends join through her link and buy a plan**, she gets a **free Premium plan**:
+the full 9 months, with every session it includes. It's granted automatically, once per member. Only the member who
+shared is rewarded; friends pay normally.
+
+- **Share link:** the UI builds it from the code, e.g. `https://www.narturebelle.com/?ref=AB3K7Q9M`. Keep `ref` (in
+  localStorage) through sign-up.
+- `GET /api/v1/referrals/{code}` (public) → `{referrerName: "Asha R."}` for an "Asha R. invited you" banner. A bad link is `404 REFERRAL_CODE_NOT_FOUND`.
+- `POST /api/v1/me/referral/claim {code}` → `{referrerName}`. Call it right after sign-in when a stored `ref` exists, then clear it.
+  The code is case-insensitive. `409 REFERRAL_SELF` (her own code), `409 REFERRAL_ALREADY_CLAIMED`, `409 REFERRAL_NOT_NEW_CUSTOMER`
+  (she has already bought a plan; only new customers count). Clear the stored `ref` on any 4xx too.
+- `GET /api/v1/me/referral` → `{code, target: 5, invited, qualified, rewardGranted, rewardOrderId, friends: [{name, joinedAt, purchased}]}`.
+  Show "qualified / 5". After the reward, the Premium plan appears in her orders and entitlements like any purchase,
+  at price 0, and she gets an email.
+
+A friend qualifies when her first real (price > 0) order becomes PAID. This is processed after the payment commits, so a
+referral problem can never affect a payment. Signed-in endpoints need TERMS + PRIVACY consent.
 
 ## Quick product/content endpoints (no auth needed, safe to build against today)
 `GET /api/v1/products`, `/api/v1/checklists`, `/api/v1/hospitals`, `/api/v1/doctor-sessions`, `/api/v1/nurse-companion/packages`, `/api/v1/features`, `/api/v1/consent-documents/current`, `/api/v1/plans`, `/api/v1/plans/{id}`, `/api/v1/providers`, `/api/v1/providers/{id}`, `/api/v1/providers/{id}/slots` — all public, all working, full details in Swagger.
