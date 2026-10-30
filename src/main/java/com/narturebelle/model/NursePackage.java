@@ -30,7 +30,9 @@ public class NursePackage {
     @Column(length = 1500)
     private String description;
 
-    @ElementCollection
+    // EAGER like every other element collection here: the controller returns this entity directly, and a
+    // lazy collection threw LazyInitializationException (500) once the session had closed.
+    @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "nurse_package_features", joinColumns = @JoinColumn(name = "package_id"))
     @Column(name = "feature")
     private List<String> features = new ArrayList<>();
