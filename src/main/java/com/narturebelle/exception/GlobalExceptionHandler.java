@@ -13,6 +13,7 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
@@ -300,6 +301,24 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, String>> handleDueDateLocked(DueDateLockedException e) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(Map.of("code", "DUE_DATE_LOCKED", "message", e.getMessage()));
+    }
+
+    @ExceptionHandler(CareersException.class)
+    public ResponseEntity<Map<String, Object>> handleCareers(CareersException e) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("code", e.getCode());
+        body.put("message", e.getMessage());
+        if (e.getField() != null) {
+            body.put("fields", Map.of(e.getField(), e.getMessage()));
+        }
+        return ResponseEntity.status(e.getStatus()).body(body);
+    }
+
+    /** Only multipart endpoint today is the careers application, so an oversized upload is the résumé. */
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<Map<String, String>> handleUploadTooLarge(MaxUploadSizeExceededException e) {
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
+                .body(Map.of("code", "RESUME_TOO_LARGE", "message", "Résumé must be 5 MB or smaller."));
     }
 
     @ExceptionHandler(SessionRecommendationException.class)

@@ -59,6 +59,9 @@ public class SecurityConfig {
                         ).permitAll()
                         // Joy Circle browsing is public; RSVP (POST/DELETE on the same path) falls through to authenticated().
                         .requestMatchers(HttpMethod.GET, "/api/v1/joy-circle/events", "/api/v1/joy-circle/events/*").permitAll()
+                        // Careers page + applying, and the ideas/feedback form (token optional there).
+                        .requestMatchers(HttpMethod.GET, "/api/v1/careers/jobs", "/api/v1/careers/jobs/*").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/careers/jobs/*/applications", "/api/v1/feedback").permitAll()
                         // Dev-only legacy endpoints (bean only exists outside prod/stage; still explicit here).
                         .requestMatchers("/api/v1/auth/send-otp", "/api/v1/auth/login").permitAll()
                         // Admin namespace (feature flags, refunds, finance view, ...). Any *_ADMIN role qualifies.

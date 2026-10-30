@@ -663,5 +663,24 @@ verify → status `ACTIVE` → slots; see §9). There's no admin UI for any of t
 ### 13.8 Not built in Phase 6
 The AI record plan (needs clinical governance), regional languages and capacity forecasting.
 
+## 14. Careers & ideas/feedback
+
+**Public (no token):**
+- `GET /api/v1/careers/jobs` → open roles: `[{id, title, team, location, employmentType: FULL_TIME|PART_TIME|CONTRACT|INTERNSHIP, workMode: ONSITE|REMOTE|HYBRID, summary, description (plain text, \n kept), requirements: [string], postedAt, status, closedAt}]`.
+- `GET /api/v1/careers/jobs/{id}` → one role; a closed or missing role is `404 JOB_NOT_FOUND`.
+- `POST /api/v1/careers/jobs/{id}/applications`, `multipart/form-data`: `fullName`* (≤120), `email`*, `phone`* (7–20 of `+0-9 ()-`), `location` (≤120), `linkedinUrl`/`portfolioUrl` (http(s), blank allowed), `yearsExperience` (0–50), `coverNote` (≤3000), `privacyConsent`* = `true`, `resume`* (PDF/DOC/DOCX, ≤5 MB; the file's bytes are checked, not just its name), `website` (honeypot, leave empty) → `201 {id, submittedAt}`.
+  Errors: `400 VALIDATION_FAILED` + `fields` (a missing résumé is `fields.resume`), `400 RESUME_TYPE_NOT_ALLOWED`, `413 RESUME_TOO_LARGE`, `404 JOB_NOT_FOUND`, `409 JOB_CLOSED`, `429 TOO_MANY_REQUESTS` (10/hour per IP, 5/day per email).
+- `POST /api/v1/feedback` JSON `{name?, email?, message* (≤3000), rating? (1–5), page? (≤300), website (honeypot)}` → `201 {id}`. The token is optional; when sent, the user id is stored. `429` after 10/hour per IP.
+- A filled honeypot gets the normal `201` (with `id: 0`) and nothing is saved or emailed.
+
+Every application (résumé attached, reply-to = the applicant) and every feedback message is emailed to `admin@narturebelle.com`, and the applicant gets a "we received your application" email. Until the email provider is configured, nothing is delivered — submissions are still saved and visible in the admin screens (`adminNotified: false`).
+
+**Admin (any `*_ADMIN` role):**
+- `GET /api/v1/admin/careers/jobs` → all roles incl. closed, each with `applicationCount`.
+- `POST /api/v1/admin/careers/jobs` `{title*, team?, location*, employmentType*, workMode*, summary* (≤500), description* (≤10000), requirements: [string] (≤30)}` → the role, `OPEN`.
+- `PUT /api/v1/admin/careers/jobs/{id}` (full replace, status unchanged), `POST …/{id}/close`, `POST …/{id}/reopen`.
+- `GET /api/v1/admin/careers/jobs/{id}/applications` → `[{id, jobId, fullName, email, phone, location, linkedinUrl, portfolioUrl, yearsExperience, coverNote, resumeFileName, resumeSizeBytes, submittedAt, adminNotified}]`.
+- `GET /api/v1/admin/careers/applications/{id}/resume` → the file itself (`Content-Disposition: attachment`; fetch with the admin token, save the blob). Every download is audited.
+
 ## Quick product/content endpoints (no auth needed, safe to build against today)
 `GET /api/v1/products`, `/api/v1/checklists`, `/api/v1/hospitals`, `/api/v1/doctor-sessions`, `/api/v1/nurse-companion/packages`, `/api/v1/features`, `/api/v1/consent-documents/current`, `/api/v1/plans`, `/api/v1/plans/{id}`, `/api/v1/providers`, `/api/v1/providers/{id}`, `/api/v1/providers/{id}/slots` — all public, all working, full details in Swagger.

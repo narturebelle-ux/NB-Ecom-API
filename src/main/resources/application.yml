@@ -29,9 +29,21 @@ spring:
     baseline-on-migrate: true
     baseline-version: 1
 
+  # Careers résumé uploads (CareersService re-checks the 5 MB cap and the file type).
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 6MB
+
 # Server Port
 server:
   port: ${PORT:8085}
+  # Behind Cloud Run's front end: take the client IP from X-Forwarded-For (only trusted from
+  # internal proxy addresses), so the public-form rate limits are per visitor, not per proxy.
+  forward-headers-strategy: native
+  tomcat:
+    # Read past an oversized upload so the browser gets the 413 RESUME_TOO_LARGE body, not a reset.
+    max-swallow-size: 10MB
 
 # CORS — set here once for every environment/profile (no per-profile override).
 cors:
@@ -69,6 +81,16 @@ records:
     max-size-bytes: ${RECORDS_MAX_SIZE_BYTES:26214400}
   share:
     max-expiry-days: ${RECORDS_SHARE_MAX_EXPIRY_DAYS:180}
+
+# Email (careers applications, feedback). Without RESEND_API_KEY, LoggingEmailSender only logs and
+# nothing is delivered; submissions are still saved and visible to admins.
+email:
+  from: ${EMAIL_FROM:NartureBelle <no-reply@narturebelle.com>}
+  resend:
+    api-key: ${RESEND_API_KEY:}
+
+careers:
+  admin-email: ${CAREERS_ADMIN_EMAIL:admin@narturebelle.com}
 
 narturebelle:
   scheduling:

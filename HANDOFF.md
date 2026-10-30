@@ -270,3 +270,13 @@ Full request/response JSON (including the new error codes `ONBOARDING_DOCUMENT_N
 **Verification note:** migration V15 was booted live against the real stage Supabase DB and applied cleanly on top of V1-V14. Covered by `OnboardingTest`: document listing with the per-user `signed` flag, idempotent signing, unknown-document 404, the full missing-steps list on an empty account, and the complete happy path (via a callback request rather than a booked call, proving that branch) including idempotent re-completion.
 
 **Known gaps:** only one document type exists; no way to require re-signing after a document version bump (if `version` 2 ever replaces `version` 1 as `active`, a user who signed version 1 would need the service to re-check against the *current* active document, which it does — `findSignature` is keyed by document id, not type, so a new active document version with a new id would correctly show as unsigned); no endpoint to revoke/withdraw a signature; the emailed-copy text is a one-line confirmation, not the actual document content, since there's no real PDF-rendering or attachment mechanism and no real email provider to attach anything to anyway.
+
+## 13. Careers & ideas/feedback
+
+Product-owner requirement (relayed by the UI session): admins post/close roles, people apply with a résumé, and every application and every ideas/feedback message is emailed to admin@narturebelle.com "through our API". Contract in `UI_INTEGRATION_GUIDE.md` §14; migration V28; covered by `CareersTest`.
+
+- **Résumés live in Postgres** (`job_application_resumes`, bytea, ≤5 MB), not Supabase Storage: prod still has placeholder Supabase credentials, so storage uploads would fail there. Admins download through the API (audited); there is no signed URL.
+- **Email goes through `com.narturebelle.email.EmailSender`**: `ResendEmailSender` when `RESEND_API_KEY` is set, otherwise `LoggingEmailSender` (logs the subject, delivers nothing). A failed send never fails a submission; `adminNotifiedAt` records whether the admin email really went out. Config: `RESEND_API_KEY`, `EMAIL_FROM` (default `NartureBelle <no-reply@narturebelle.com>`), `CAREERS_ADMIN_EMAIL` (default `admin@narturebelle.com`).
+- **Spam control**: a honeypot field, magic-byte checks on the résumé, and an in-memory per-instance rate limiter (`RateLimiter`). `server.forward-headers-strategy: native` makes the client IP come from Cloud Run's `X-Forwarded-For`.
+
+**Open product-owner decision — retention:** applications and résumés are personal data, and nothing deletes them today. Decide how long to keep them (e.g. 12 months after the role closes) and whether rejected applicants' data goes sooner; then add a scheduled purge.
