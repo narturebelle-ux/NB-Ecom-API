@@ -296,6 +296,12 @@ public class GlobalExceptionHandler {
                 .body(Map.of("code", "CATALOG_ITEM_IN_USE", "message", e.getMessage()));
     }
 
+    @ExceptionHandler(DueDateLockedException.class)
+    public ResponseEntity<Map<String, String>> handleDueDateLocked(DueDateLockedException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(Map.of("code", "DUE_DATE_LOCKED", "message", e.getMessage()));
+    }
+
     @ExceptionHandler(SessionRecommendationException.class)
     public ResponseEntity<Map<String, String>> handleSessionRecommendation(SessionRecommendationException e) {
         return ResponseEntity.status(e.getStatus())

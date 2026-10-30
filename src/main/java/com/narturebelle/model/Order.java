@@ -37,6 +37,20 @@ public class Order {
     @Column(nullable = false)
     private BigDecimal price;
 
+    /** How many of the plan's 9 months this order pays for (PlanPricing). Null on pre-V27 orders = 9. */
+    private Integer months;
+
+    /** The EDD the months were counted from; null when she was quoted the full plan. Locks EDD edits (JourneyService). */
+    private java.time.LocalDate pricedDueDate;
+
+    public int effectiveMonths() { return months != null ? months : 9; }
+
+    public Integer getMonths() { return months; }
+    public void setMonths(Integer months) { this.months = months; }
+
+    public java.time.LocalDate getPricedDueDate() { return pricedDueDate; }
+    public void setPricedDueDate(java.time.LocalDate pricedDueDate) { this.pricedDueDate = pricedDueDate; }
+
     @Column(nullable = false)
     private LocalDateTime createdAt;
 

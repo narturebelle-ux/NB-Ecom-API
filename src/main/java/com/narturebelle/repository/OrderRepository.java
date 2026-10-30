@@ -12,4 +12,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     List<Order> findByUserIdOrderByCreatedAtDesc(Long userId);
     List<Order> findByStatusIn(List<OrderStatus> statuses);
     boolean existsByUserIdAndStatus(Long userId, OrderStatus status);
+
+    /** Orders whose price was counted from a due date -- they lock how far the EDD may move. */
+    List<Order> findByUserIdAndStatusInAndPricedDueDateIsNotNull(Long userId, List<OrderStatus> statuses);
 }
