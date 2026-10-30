@@ -107,6 +107,7 @@ public class DataInitializer implements CommandLineRunner {
         seedFlag("aiAssistant", false, "AI record plan (Phase 6) - needs clinical governance first");
         seedFlag("joyCircle", false, "Non-clinical group events (Phase 6)");
         seedFlag("legacyLeadForms", false, "Old public lead/assessment forms");
+        seedFlag("ideaPool", true, "Idea pool: members submit ideas and vote (submissions and voting close when off)");
     }
 
     private void seedFlag(String key, boolean enabled, String description) {

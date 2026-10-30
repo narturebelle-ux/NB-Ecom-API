@@ -59,6 +59,8 @@ public class SecurityConfig {
                         ).permitAll()
                         // Joy Circle browsing is public; RSVP (POST/DELETE on the same path) falls through to authenticated().
                         .requestMatchers(HttpMethod.GET, "/api/v1/joy-circle/events", "/api/v1/joy-circle/events/*").permitAll()
+                        // Idea pool browsing + shared idea links are public; voting/submitting fall through to authenticated().
+                        .requestMatchers(HttpMethod.GET, "/api/v1/ideas", "/api/v1/ideas/**").permitAll()
                         // Invite banner on a shared referral link ("Asha R. invited you").
                         .requestMatchers(HttpMethod.GET, "/api/v1/referrals/*").permitAll()
                         // Careers page + applying, and the ideas/feedback form (token optional there).
