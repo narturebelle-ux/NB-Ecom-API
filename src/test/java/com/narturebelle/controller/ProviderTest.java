@@ -204,6 +204,15 @@ class ProviderTest {
         mockMvc.perform(get("/api/v1/providers?language=Tamil"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", org.hamcrest.Matchers.hasSize(0)));
+
+        mockMvc.perform(get("/api/v1/providers?modality=VIRTUAL"))
+                .andExpect(status().isOk());
+
+        // An unknown enum value is a 400 with the parameter named, not the 500 catch-all.
+        mockMvc.perform(get("/api/v1/providers?professionalType=NOPE"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.fields.professionalType").exists());
     }
 
     @Test

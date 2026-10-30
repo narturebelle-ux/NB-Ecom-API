@@ -11,6 +11,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
@@ -314,6 +315,16 @@ public class GlobalExceptionHandler {
         body.put("code", "VALIDATION_FAILED");
         body.put("message", "Missing required header: " + e.getHeaderName());
         body.put("fields", Map.of(e.getHeaderName(), "This header is required."));
+        return ResponseEntity.badRequest().body(body);
+    }
+
+    /** A query/path parameter that can't be converted (e.g. ?professionalType=NOPE) -- a 400, not the 500 catch-all. */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<Map<String, Object>> handleTypeMismatch(MethodArgumentTypeMismatchException e) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("code", "VALIDATION_FAILED");
+        body.put("message", "Invalid value for parameter: " + e.getName());
+        body.put("fields", Map.of(e.getName(), "Invalid value: " + e.getValue()));
         return ResponseEntity.badRequest().body(body);
     }
 
