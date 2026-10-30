@@ -1,23 +1,25 @@
 package com.narturebelle.dto;
 
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import com.narturebelle.model.PregnancyStage;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 
 public class NurseBookingRequest {
     @NotBlank
-    private String clientName;
+    @Size(max = 255) private String clientName;
 
     @NotBlank
-    private String clientPhone;
+    @Pattern(regexp = InputRules.PHONE, message = InputRules.PHONE_MESSAGE) private String clientPhone;
 
     @Email
-    private String clientEmail;
+    @Size(max = 254) private String clientEmail;
     private PregnancyStage currentStage;
-    private String preferredLanguage;
+    @Size(max = 255) private String preferredLanguage;
     private Long packageId;
-    private String city;
-    private String notes;
+    @Size(max = 255) private String city;
+    @Size(max = 1500) private String notes;
 
     public NurseBookingRequest() {}
 

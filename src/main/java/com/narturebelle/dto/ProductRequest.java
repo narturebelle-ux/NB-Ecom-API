@@ -1,5 +1,6 @@
 package com.narturebelle.dto;
 
+import jakarta.validation.constraints.Pattern;
 import com.narturebelle.model.NecessityTier;
 import com.narturebelle.model.PregnancyStage;
 import jakarta.validation.constraints.DecimalMax;
@@ -24,7 +25,7 @@ public class ProductRequest {
     @NotNull private PregnancyStage stage;
     @NotNull private NecessityTier tier;
     @Size(max = 1500) private String clinicalRationale;
-    @Size(max = 255) private String imageUrl;
+    @Size(max = 255) @Pattern(regexp = InputRules.HTTPS_URL, message = InputRules.HTTPS_URL_MESSAGE) private String imageUrl;
     @DecimalMin("0.0") @DecimalMax("5.0") private Double rating;
     @PositiveOrZero private Integer reviewCount;
     private Boolean doctorApproved;

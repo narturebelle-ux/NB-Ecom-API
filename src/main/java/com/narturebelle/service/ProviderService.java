@@ -1,5 +1,6 @@
 package com.narturebelle.service;
 
+import com.narturebelle.exception.InputValidationException;
 import com.narturebelle.dto.CreateCredentialRequest;
 import com.narturebelle.dto.CreateProviderRequest;
 import com.narturebelle.dto.CreateServiceOfferingRequest;
@@ -24,6 +25,7 @@ import com.narturebelle.repository.UserRepository;
 import com.narturebelle.security.AuditService;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.EnumMap;
 import java.util.EnumSet;
@@ -185,6 +187,15 @@ public class ProviderService {
 
     public ProviderCredential addCredential(Long providerId, CreateCredentialRequest req) {
         findOrThrow(providerId);
+        LocalDate today = LocalDate.now();
+        if (req.getExpiresAt() != null) {
+            if (!req.getExpiresAt().isAfter(today)) {
+                throw new InputValidationException("expiresAt", "This credential has already expired.");
+            }
+            if (req.getIssuedAt() != null && !req.getExpiresAt().isAfter(req.getIssuedAt())) {
+                throw new InputValidationException("expiresAt", "Expiry date must be after the issue date.");
+            }
+        }
         ProviderCredential credential = new ProviderCredential();
         credential.setProviderId(providerId);
         credential.setCredentialType(req.getCredentialType());
@@ -208,6 +219,13 @@ public class ProviderService {
 
     public List<ProviderSlot> addSlots(Long providerId, CreateSlotsRequest req) {
         findOrThrow(providerId);
+        List<LocalDateTime[]> checked = new java.util.ArrayList<>();
+        for (CreateSlotsRequest.SlotWindow window : req.getSlots()) {
+            SlotRules.check(window.getStartAt(), window.getEndAt(), checked);
+            if (providerSlotRepository.existsByProviderIdAndStartAtBeforeAndEndAtAfter(providerId, window.getEndAt(), window.getStartAt())) {
+                throw new InputValidationException("slots", "That time overlaps a slot this provider already has.");
+            }
+        }
         return req.getSlots().stream().map(window -> {
             ProviderSlot slot = new ProviderSlot();
             slot.setProviderId(providerId);

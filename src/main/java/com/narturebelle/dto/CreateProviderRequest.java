@@ -1,5 +1,6 @@
 package com.narturebelle.dto;
 
+import jakarta.validation.constraints.Size;
 import com.narturebelle.model.Role;
 import jakarta.validation.constraints.NotNull;
 
@@ -13,9 +14,9 @@ public class CreateProviderRequest {
     @NotNull
     private Role professionalType;
 
-    private String displayName;
-    private String bio;
-    private String city;
+    @Size(max = 255) private String displayName;
+    @Size(max = 2000) private String bio;
+    @Size(max = 255) private String city;
     private List<String> languages;
 
     public Long getUserId() { return userId; }

@@ -45,6 +45,13 @@ public class Booking {
     @Column(nullable = false)
     private LocalDateTime scheduledEnd;
 
+    /** Not stored: a gentle note on the create/reschedule response when the date is outside the suggested range. */
+    @Transient
+    private String timingNote;
+
+    public String getTimingNote() { return timingNote; }
+    public void setTimingNote(String timingNote) { this.timingNote = timingNote; }
+
     @Column(columnDefinition = "text")
     private String providerNote;
 

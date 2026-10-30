@@ -1,5 +1,6 @@
 package com.narturebelle.dto;
 
+import jakarta.validation.constraints.Pattern;
 import com.narturebelle.model.Modality;
 import jakarta.validation.constraints.Future;
 import jakarta.validation.constraints.NotBlank;
@@ -42,7 +43,7 @@ public class CreateCommunityEventRequest {
     private String location;
 
     @Size(max = 255)
-    private String joinUrl;
+    @Pattern(regexp = InputRules.HTTPS_URL, message = InputRules.HTTPS_URL_MESSAGE) private String joinUrl;
 
     /** Omit for unlimited. */
     @Positive

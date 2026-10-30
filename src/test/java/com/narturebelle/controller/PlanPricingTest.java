@@ -6,7 +6,6 @@ import com.narturebelle.model.*;
 import com.narturebelle.repository.*;
 import com.narturebelle.security.FirebaseTokenVerifier;
 import com.narturebelle.security.VerifiedFirebaseToken;
-import com.narturebelle.service.EntitlementService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,12 +22,13 @@ import java.time.LocalDateTime;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/** Covers duration-based plan pricing (price / 9 per month, months left until the due date) and the EDD lock. */
+/** Plan prices are constant whatever her due date, and she can only hold one plan at a time. */
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
@@ -45,7 +45,6 @@ class PlanPricingTest {
     @Autowired private InstallmentScheduleRepository installmentScheduleRepository;
     @Autowired private EntitlementRepository entitlementRepository;
     @Autowired private PaymentRepository paymentRepository;
-    @Autowired private EntitlementService entitlementService;
 
     @MockBean private FirebaseTokenVerifier firebaseTokenVerifier;
 
@@ -100,65 +99,100 @@ class PlanPricingTest {
         throw new AssertionError("No plan " + code);
     }
 
+    private long order(long planId, String key) throws Exception {
+        String body = mockMvc.perform(post("/api/v1/orders").header("Authorization", "Bearer " + TOKEN)
+                        .header("Idempotency-Key", key).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"planId\":" + planId + ",\"paymentMode\":\"ONE_TIME\"}"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        return objectMapper.readTree(body).get("id").asLong();
+    }
+
+    private long payment(long orderId) throws Exception {
+        String body = mockMvc.perform(post("/api/v1/payments/create").header("Authorization", "Bearer " + TOKEN)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"orderId\":" + orderId + "}"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        return objectMapper.readTree(body).get("id").asLong();
+    }
+
+    private void pay(long paymentId) throws Exception {
+        mockMvc.perform(post("/api/v1/payments/" + paymentId + "/mock/succeed").header("Authorization", "Bearer " + TOKEN))
+                .andExpect(status().isOk());
+    }
+
     @Test
-    void noDueDate_quotesTheFullNineMonthPlan() throws Exception {
-        JsonNode quote = quote();
-        assertEquals(9, quote.get("months").asInt());
-        assertEquals("FULL_PLAN", quote.get("basis").asText());
-        JsonNode standard = plan(quote, "STANDARD");
+    void priceIsTheSame_whateverTheDueDate() throws Exception {
+        JsonNode noJourney = quote();
+        assertEquals("FULL_PLAN", noJourney.get("basis").asText());
+        assertEquals(9, noJourney.get("months").asInt());
+
+        journeyDueIn(40); // would have been 2 months under the old due-date pricing
+        JsonNode nearDueDate = quote();
+        assertEquals("FULL_PLAN", nearDueDate.get("basis").asText());
+        JsonNode standard = plan(nearDueDate, "STANDARD");
         assertEquals(0, new BigDecimal("9999").compareTo(standard.get("oneTimePrice").decimalValue()));
         assertEquals(0, new BigDecimal("1111").compareTo(standard.get("monthlyPrice").decimalValue()));
         assertEquals(9, standard.get("totalSessions").asInt());
-    }
+        assertEquals(365, standard.get("validityDays").asInt());
 
-    @Test
-    void dueIn70Days_paysForThreeMonths_andGetsAThirdOfTheSessions() throws Exception {
-        journeyDueIn(70); // 70 / 30.44 = 2.3 -> 3 months
-        JsonNode quote = quote();
-        assertEquals(3, quote.get("months").asInt());
-        assertEquals("DUE_DATE", quote.get("basis").asText());
-        JsonNode standard = plan(quote, "STANDARD");
-        assertEquals(0, new BigDecimal("3333").compareTo(standard.get("oneTimePrice").decimalValue()));
-        assertEquals(0, new BigDecimal("9999").compareTo(standard.get("fullOneTimePrice").decimalValue()));
-        assertEquals(0, new BigDecimal("5000").compareTo(plan(quote, "CARE").get("oneTimePrice").decimalValue())); // 14999*3/9
+        long orderId = order(standard.get("id").asLong(), "pricing-1");
+        Order order = orderRepository.findById(orderId).orElseThrow();
+        assertEquals(0, new BigDecimal("9999").compareTo(order.getPrice()));
+        assertEquals(9, order.getMonths());
 
-        String body = mockMvc.perform(post("/api/v1/orders").header("Authorization", "Bearer " + TOKEN)
-                        .header("Idempotency-Key", "pricing-1").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"planId\":" + standard.get("id").asLong() + ",\"paymentMode\":\"ONE_TIME\"}"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.months").value(3))
-                .andReturn().getResponse().getContentAsString();
-        Order order = orderRepository.findById(objectMapper.readTree(body).get("id").asLong()).orElseThrow();
-        assertEquals(0, new BigDecimal("3333").compareTo(order.getPrice()));
-
-        // Sessions shrink in proportion, at least 1 per professional the plan includes; matches the quote.
-        entitlementService.grantForOrder(order);
+        pay(payment(orderId));
         int granted = entitlementRepository.findByUserIdOrderByCreatedAtDesc(userId).stream()
                 .mapToInt(Entitlement::getTotalSessions).sum();
-        assertEquals(standard.get("totalSessions").asInt(), granted);
+        assertEquals(9, granted);
     }
 
     @Test
-    void afterOrdering_dueDateCanOnlyMoveWithinTolerance() throws Exception {
-        Journey journey = journeyDueIn(40);
+    void oneActivePlanAtATime() throws Exception {
         long planId = plan(quote(), "STANDARD").get("id").asLong();
-        mockMvc.perform(post("/api/v1/orders").header("Authorization", "Bearer " + TOKEN)
-                        .header("Idempotency-Key", "pricing-lock").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"planId\":" + planId + ",\"paymentMode\":\"ONE_TIME\"}"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.months").value(2));
+        pay(payment(order(planId, "one-plan-1")));
 
-        // "Pay for a near due date, then move it back" is refused...
+        mockMvc.perform(post("/api/v1/orders").header("Authorization", "Bearer " + TOKEN)
+                        .header("Idempotency-Key", "one-plan-2").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"planId\":" + plan(quote(), "PREMIUM").get("id").asLong() + ",\"paymentMode\":\"ONE_TIME\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("PLAN_ALREADY_ACTIVE"));
+
+        // Once the 12 months are over she can buy again.
+        for (Entitlement entitlement : entitlementRepository.findByUserIdOrderByCreatedAtDesc(userId)) {
+            entitlement.setExpiresAt(LocalDateTime.now().minusDays(1));
+            entitlementRepository.save(entitlement);
+        }
+        order(planId, "one-plan-3");
+    }
+
+    @Test
+    void aNewCheckoutReplacesAnUnfinishedOne_soOnlyOneCanBePaid() throws Exception {
+        JsonNode quote = quote();
+        long first = order(plan(quote, "STANDARD").get("id").asLong(), "replace-1");
+        long firstPayment = payment(first);
+
+        long second = order(plan(quote, "CARE").get("id").asLong(), "replace-2");
+        assertEquals(OrderStatus.FAILED, orderRepository.findById(first).orElseThrow().getStatus());
+        assertEquals(OrderStatus.PENDING, orderRepository.findById(second).orElseThrow().getStatus());
+
+        // A late success on the replaced order doesn't grant a plan.
+        pay(firstPayment);
+        assertEquals(OrderStatus.FAILED, orderRepository.findById(first).orElseThrow().getStatus());
+        assertTrue(entitlementRepository.findByUserIdOrderByCreatedAtDesc(userId).isEmpty());
+
+        pay(payment(second));
+        assertEquals(OrderStatus.PAID, orderRepository.findById(second).orElseThrow().getStatus());
+    }
+
+    @Test
+    void dueDateCanBeCorrectedAfterBuying() throws Exception {
+        Journey journey = journeyDueIn(40);
+        order(plan(quote(), "STANDARD").get("id").asLong(), "edd-1");
+
         mockMvc.perform(patch("/api/v1/me/journeys/" + journey.getId()).header("Authorization", "Bearer " + TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"expectedDeliveryDate\":\"" + LocalDate.now().plusDays(200) + "\"}"))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("DUE_DATE_LOCKED"));
-
-        // ...while a dating-scan sized correction is fine.
-        mockMvc.perform(patch("/api/v1/me/journeys/" + journey.getId()).header("Authorization", "Bearer " + TOKEN)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"expectedDeliveryDate\":\"" + LocalDate.now().plusDays(50) + "\"}"))
                 .andExpect(status().isOk());
     }
 }

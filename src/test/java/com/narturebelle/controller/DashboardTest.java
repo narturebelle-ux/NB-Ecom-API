@@ -117,7 +117,7 @@ class DashboardTest {
         mockMvc.perform(post("/api/v1/me/journeys")
                         .header("Authorization", "Bearer " + TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"status\":\"PRE_DELIVERY\"}"))
+                        .content("{\"status\":\"PRE_DELIVERY\",\"expectedDeliveryDate\":\"" + java.time.LocalDate.now().plusDays(14) + "\"}"))
                 .andExpect(status().isOk());
 
         mockMvc.perform(get("/api/v1/me/dashboard").header("Authorization", "Bearer " + TOKEN))
@@ -132,11 +132,11 @@ class DashboardTest {
     }
 
     @Test
-    void newPregnancyJourney_noEdd_showsFullRoadmapFromTrimester1() throws Exception {
+    void newPregnancyJourney_earlyOn_showsFullRoadmapFromTrimester1() throws Exception {
         mockMvc.perform(post("/api/v1/me/journeys")
                         .header("Authorization", "Bearer " + TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"status\":\"PREGNANCY\"}"))
+                        .content("{\"status\":\"PREGNANCY\",\"expectedDeliveryDate\":\"" + java.time.LocalDate.now().plusDays(260) + "\"}"))
                 .andExpect(status().isOk());
 
         mockMvc.perform(get("/api/v1/me/dashboard").header("Authorization", "Bearer " + TOKEN))

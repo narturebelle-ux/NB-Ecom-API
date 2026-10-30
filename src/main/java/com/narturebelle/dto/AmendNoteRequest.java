@@ -1,14 +1,15 @@
 package com.narturebelle.dto;
 
+import jakarta.validation.constraints.Size;
 import jakarta.validation.constraints.NotBlank;
 
 public class AmendNoteRequest {
 
     @NotBlank
-    private String note;
+    @Size(max = 5000) private String note;
 
     @NotBlank
-    private String reason;
+    @Size(max = 255) private String reason;
 
     public String getNote() { return note; }
     public void setNote(String note) { this.note = note; }

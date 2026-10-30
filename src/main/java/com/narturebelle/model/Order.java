@@ -37,7 +37,7 @@ public class Order {
     @Column(nullable = false)
     private BigDecimal price;
 
-    /** How many of the plan's 9 months this order pays for (PlanPricing). Null on pre-V27 orders = 9. */
+    /** 9 on every order now that prices are constant. Below 9 only on orders from the old due-date pricing; null on pre-V27 orders = 9. */
     private Integer months;
 
     /** The EDD the months were counted from; null when she was quoted the full plan. Locks EDD edits (JourneyService). */

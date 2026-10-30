@@ -155,14 +155,17 @@ class AdminFinanceTest {
 
     @Test
     void refundOnPendingOrder_returns409() throws Exception {
-        String orderBody = mockMvc.perform(post("/api/v1/orders")
-                        .header("Authorization", "Bearer " + TOKEN_USER)
-                        .header("Idempotency-Key", "finance-key-pending")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"planId\":2,\"paymentMode\":\"ONE_TIME\"}"))
-                .andExpect(status().isOk())
-                .andReturn().getResponse().getContentAsString();
-        Long pendingOrderId = Long.valueOf(orderBody.replaceAll(".*\"id\":(\\d+).*", "$1"));
+        // Saved directly: she already owns a paid plan here, so POST /orders would refuse a second one.
+        com.narturebelle.model.Order paid = orderRepository.findById(paidOrderId).orElseThrow();
+        com.narturebelle.model.Order pending = new com.narturebelle.model.Order();
+        pending.setUserId(paid.getUserId());
+        pending.setPlanVersionId(paid.getPlanVersionId());
+        pending.setIdempotencyKey("finance-key-pending");
+        pending.setRequestFingerprint("fp");
+        pending.setStatus(com.narturebelle.model.OrderStatus.PENDING);
+        pending.setPaymentMode(paid.getPaymentMode());
+        pending.setPrice(paid.getPrice());
+        Long pendingOrderId = orderRepository.save(pending).getId();
 
         mockMvc.perform(post("/api/v1/admin/orders/" + pendingOrderId + "/refunds")
                         .header("Authorization", "Bearer " + TOKEN_ADMIN)

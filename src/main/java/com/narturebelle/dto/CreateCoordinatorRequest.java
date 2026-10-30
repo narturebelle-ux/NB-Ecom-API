@@ -1,5 +1,6 @@
 package com.narturebelle.dto;
 
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Size;
@@ -10,7 +11,7 @@ public class CreateCoordinatorRequest {
 
     @NotBlank @Size(max = 255) private String displayName;
     @NotEmpty @Size(max = 10) private List<@NotBlank @Size(max = 50) String> languages;
-    @Size(max = 255) private String photoUrl;
+    @Size(max = 255) @Pattern(regexp = InputRules.HTTPS_URL, message = InputRules.HTTPS_URL_MESSAGE) private String photoUrl;
     @Size(max = 1000) private String bio;
 
     public String getDisplayName() { return displayName; }

@@ -16,6 +16,5 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     /** A real purchase: PAID with a price above zero (a referral-reward order is free and doesn't count). */
     boolean existsByUserIdAndStatusAndPriceGreaterThan(Long userId, OrderStatus status, java.math.BigDecimal price);
 
-    /** Orders whose price was counted from a due date -- they lock how far the EDD may move. */
-    List<Order> findByUserIdAndStatusInAndPricedDueDateIsNotNull(Long userId, List<OrderStatus> statuses);
+    List<Order> findByUserIdAndStatusIn(Long userId, List<OrderStatus> statuses);
 }

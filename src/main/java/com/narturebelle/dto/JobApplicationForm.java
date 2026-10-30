@@ -8,10 +8,10 @@ public class JobApplicationForm {
 
     @NotBlank @Size(max = 120) private String fullName;
     @NotBlank @Email @Size(max = 254) private String email;
-    @NotBlank @Pattern(regexp = "[+0-9 ()-]{7,20}", message = "must be a phone number of 7-20 digits") private String phone;
+    @NotBlank @Pattern(regexp = InputRules.PHONE, message = InputRules.PHONE_MESSAGE) private String phone;
     @Size(max = 120) private String location;
-    @Size(max = 300) @Pattern(regexp = "(https?://\\S+)?", message = "must be an http(s) link") private String linkedinUrl;
-    @Size(max = 300) @Pattern(regexp = "(https?://\\S+)?", message = "must be an http(s) link") private String portfolioUrl;
+    @Size(max = 300) @Pattern(regexp = InputRules.HTTPS_URL, message = InputRules.HTTPS_URL_MESSAGE) private String linkedinUrl;
+    @Size(max = 300) @Pattern(regexp = InputRules.HTTPS_URL, message = InputRules.HTTPS_URL_MESSAGE) private String portfolioUrl;
     @Min(0) @Max(50) private Integer yearsExperience;
     @Size(max = 3000) private String coverNote;
     @NotNull @AssertTrue(message = "must be accepted") private Boolean privacyConsent;

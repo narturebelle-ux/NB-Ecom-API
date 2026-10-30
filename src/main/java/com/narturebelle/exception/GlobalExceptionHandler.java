@@ -297,12 +297,6 @@ public class GlobalExceptionHandler {
                 .body(Map.of("code", "CATALOG_ITEM_IN_USE", "message", e.getMessage()));
     }
 
-    @ExceptionHandler(DueDateLockedException.class)
-    public ResponseEntity<Map<String, String>> handleDueDateLocked(DueDateLockedException e) {
-        return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(Map.of("code", "DUE_DATE_LOCKED", "message", e.getMessage()));
-    }
-
     @ExceptionHandler(CareersException.class)
     public ResponseEntity<Map<String, Object>> handleCareers(CareersException e) {
         Map<String, Object> body = new HashMap<>();
@@ -330,6 +324,21 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ReferralException.class)
     public ResponseEntity<Map<String, String>> handleReferral(ReferralException e) {
         return ResponseEntity.status(e.getStatus())
+                .body(Map.of("code", e.getCode(), "message", e.getMessage()));
+    }
+
+    @ExceptionHandler(InputValidationException.class)
+    public ResponseEntity<Map<String, Object>> handleInputValidation(InputValidationException e) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("code", "VALIDATION_FAILED");
+        body.put("message", e.getMessage());
+        body.put("fields", Map.of(e.getField(), e.getMessage()));
+        return ResponseEntity.badRequest().body(body);
+    }
+
+    @ExceptionHandler(BusinessRuleException.class)
+    public ResponseEntity<Map<String, String>> handleBusinessRule(BusinessRuleException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(Map.of("code", e.getCode(), "message", e.getMessage()));
     }
 

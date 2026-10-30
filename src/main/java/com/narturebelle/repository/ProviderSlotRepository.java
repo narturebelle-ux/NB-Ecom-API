@@ -12,6 +12,8 @@ import java.util.List;
 
 public interface ProviderSlotRepository extends JpaRepository<ProviderSlot, Long> {
 
+    boolean existsByProviderIdAndStartAtBeforeAndEndAtAfter(Long providerId, LocalDateTime end, LocalDateTime start);
+
     List<ProviderSlot> findByProviderIdAndStatusAndStartAtAfterOrderByStartAtAsc(
             Long providerId, SlotStatus status, LocalDateTime after);
 

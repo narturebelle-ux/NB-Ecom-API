@@ -1,5 +1,6 @@
 package com.narturebelle.dto;
 
+import jakarta.validation.constraints.Pattern;
 import com.narturebelle.model.PregnancyStage;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -18,7 +19,7 @@ public class ChecklistTaskRequest {
     @Size(max = 255) private String sponsoredPartnerName;
     @Size(max = 255) private String sponsoredPartnerBadge;
     @Size(max = 255) private String partnerDiscountCode;
-    @Size(max = 255) private String partnerBookingUrl;
+    @Size(max = 255) @Pattern(regexp = InputRules.HTTPS_URL, message = InputRules.HTTPS_URL_MESSAGE) private String partnerBookingUrl;
 
     public PregnancyStage getStage() { return stage; }
     public void setStage(PregnancyStage stage) { this.stage = stage; }

@@ -1,5 +1,6 @@
 package com.narturebelle.dto;
 
+import jakarta.validation.constraints.Size;
 import com.narturebelle.model.RecordCategory;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -14,7 +15,7 @@ public class RegisterRecordRequest {
     private String objectPath;
 
     @NotBlank
-    private String originalFileName;
+    @Size(max = 255) private String originalFileName;
 
     @NotBlank
     private String mimeType;

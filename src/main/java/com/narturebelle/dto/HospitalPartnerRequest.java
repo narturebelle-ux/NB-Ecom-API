@@ -1,5 +1,6 @@
 package com.narturebelle.dto;
 
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
@@ -11,16 +12,16 @@ public class HospitalPartnerRequest {
 
     @NotBlank @Size(max = 255) private String name;
     @NotBlank @Size(max = 255) private String city;
-    @Size(max = 20) private String pincode;
+    @Size(max = 20) @Pattern(regexp = InputRules.PINCODE, message = InputRules.PINCODE_MESSAGE) private String pincode;
     @Size(max = 255) private String address;
     @Size(max = 255) private String specialty;
     @DecimalMin("0.0") @DecimalMax("5.0") private Double rating;
     @PositiveOrZero private Integer reviewCount;
     @Size(max = 50) private String phone;
-    @Size(max = 255) private String consultationUrl;
+    @Size(max = 255) @Pattern(regexp = InputRules.HTTPS_URL, message = InputRules.HTTPS_URL_MESSAGE) private String consultationUrl;
     @Size(max = 255) private String discountDetails;
     @Size(max = 255) private String partnerTier;
-    @Size(max = 255) private String imageUrl;
+    @Size(max = 255) @Pattern(regexp = InputRules.HTTPS_URL, message = InputRules.HTTPS_URL_MESSAGE) private String imageUrl;
 
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }

@@ -13,6 +13,7 @@ import java.util.List;
 
 public interface EntitlementRepository extends JpaRepository<Entitlement, Long> {
     List<Entitlement> findByUserIdOrderByCreatedAtDesc(Long userId);
+    boolean existsByOrderIdAndExpiresAtAfter(Long orderId, java.time.LocalDateTime time);
     boolean existsByOrderId(Long orderId);
 
     @Query("select case when count(e) > 0 then true else false end from Entitlement e "

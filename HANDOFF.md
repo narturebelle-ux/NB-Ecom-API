@@ -289,3 +289,17 @@ Product-owner design (2026-10-30): signed-in members post ideas into a public po
 ## 15. Referral links & free Premium reward
 
 Product-owner decision (2026-10-30): each member gets a referral code; after 5 referred friends buy a plan she earns a free Premium plan (full 9 months), once, and only she is rewarded. Tables in V30 (`referral_codes`, `referrals` with one row per referred member, `referral_rewards` keyed by member). `PaymentService.handleSucceeded` calls `ReferralService.onOrderPaid` **after the webhook transaction commits**, in a REQUIRES_NEW transaction with errors logged, so referral bookkeeping can never roll back a payment. The reward is a zero-price PAID order for the active PREMIUM version, plus the usual `grantForOrder` entitlements. `ReferralReward` is `Persistable` (always INSERT), so a concurrent second grant hits the primary key. Zero-price orders never qualify a referral. Claiming is for new customers only (no real PAID order yet). Contract in `UI_INTEGRATION_GUIDE.md` §16; covered by `ReferralTest`, which drives real checkouts. **V30 depends on V29 (idea pool): merge `feature/idea-impact` before this branch.** Open product-owner points: whether a refunded friend should un-qualify (today it stays counted), and whether the reward is once ever (today) or repeatable every 5.
+
+## 16. Constant prices, session date suggestions and input rules
+
+Product-owner decisions (2026-10-30). Contract in `UI_INTEGRATION_GUIDE.md` §17; covered by `PlanPricingTest` and `InputRulesTest`.
+
+- **Prices are constant.** This reverses commit 70296dd (due-date pricing): `PlanPricing` now only holds the display monthly rate and `prorateSessions`, which stays solely so orders placed under the old pricing (`months` < 9) keep the sessions they paid for. `orders.priced_due_date` and `orders.months` stay in the schema; new orders have months 9 and no priced due date. The EDD lock and `DUE_DATE_LOCKED` are gone.
+- **One plan at a time.** `OrderService` refuses a new order while a PAID or PARTIALLY_REFUNDED order has unexpired entitlements. A new checkout marks older PENDING orders FAILED, so only one order is ever payable, and `PaymentService` no longer grants entitlements on a FAILED order: it audits `PAYMENT_ON_CLOSED_ORDER` for a person to refund. There is no upgrade path yet.
+- **Session windows** (`SessionWindowService`) place `care_protocol_steps` on the calendar from the due date. Those rows are PENDING_CLINICAL_REVIEW, so the response says `guidanceOnly`, and a booking outside a window only gets a `timingNote`, never a refusal.
+- **Rules live in** `dto/InputRules` (formats), `SlotRules`, `BookingService.requireBookable`, and `JourneyService`. New exceptions: `InputValidationException` (400 with fields) and `BusinessRuleException` (409 with code).
+
+**Open points:**
+- Existing rows are not re-validated: a stored phone number or a past due date stays until someone edits it. A pregnant member with a past due date can still change other fields, but any new due date must pass the rules.
+- Admin slot creation now rejects past slots; the sample seeder writes directly and isn't affected.
+- Reward orders from referrals count as an active plan.

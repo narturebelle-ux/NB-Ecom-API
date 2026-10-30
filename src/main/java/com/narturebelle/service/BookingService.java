@@ -1,5 +1,10 @@
 package com.narturebelle.service;
 
+import com.narturebelle.exception.BusinessRuleException;
+import com.narturebelle.model.Journey;
+import com.narturebelle.model.JourneyStatus;
+import com.narturebelle.model.Role;
+import com.narturebelle.repository.JourneyRepository;
 import com.narturebelle.dto.CreateBookingRequest;
 import com.narturebelle.dto.SubmitFeedbackRequest;
 import com.narturebelle.exception.BookingNotAllowedException;
@@ -47,12 +52,15 @@ public class BookingService {
     private final EntitlementService entitlementService;
     private final PayoutService payoutService;
     private final AuditService auditService;
+    private final JourneyRepository journeyRepository;
+    private final SessionWindowService sessionWindowService;
 
     public BookingService(BookingRepository bookingRepository, ProviderRepository providerRepository,
                            ServiceOfferingRepository serviceOfferingRepository, ProviderSlotRepository providerSlotRepository,
                            BookingNoteAmendmentRepository bookingNoteAmendmentRepository,
                            SessionFeedbackRepository sessionFeedbackRepository, EntitlementService entitlementService,
-                           PayoutService payoutService, AuditService auditService) {
+                           PayoutService payoutService, AuditService auditService,
+                           JourneyRepository journeyRepository, SessionWindowService sessionWindowService) {
         this.bookingRepository = bookingRepository;
         this.providerRepository = providerRepository;
         this.serviceOfferingRepository = serviceOfferingRepository;
@@ -62,6 +70,8 @@ public class BookingService {
         this.entitlementService = entitlementService;
         this.payoutService = payoutService;
         this.auditService = auditService;
+        this.journeyRepository = journeyRepository;
+        this.sessionWindowService = sessionWindowService;
     }
 
     @Transactional
@@ -84,6 +94,7 @@ public class BookingService {
 
         ProviderSlot slot = providerSlotRepository.findById(req.getSlotId())
                 .orElseThrow(() -> new SlotNotAvailableException("No such slot: " + req.getSlotId()));
+        requireBookable(userId, provider.getProfessionalType(), slot);
         if (providerSlotRepository.claimSlot(slot.getId()) == 0) {
             throw new SlotNotAvailableException("Slot " + slot.getId() + " is no longer available.");
         }
@@ -108,7 +119,33 @@ public class BookingService {
         auditService.record("BOOKING_CREATED", "Booking", String.valueOf(saved.getId()), null,
                 Map.of("providerId", provider.getId(), "slotId", slot.getId()));
 
+        saved.setTimingNote(sessionWindowService.timingNote(userId, saved.getProfessionalType(), slot.getStartAt().toLocalDate()));
         return saved;
+    }
+
+    /** The checks that apply to any new session date: not past, inside her plan, and right for her stage. */
+    private void requireBookable(Long userId, Role professionalType, ProviderSlot slot) {
+        if (!slot.getStartAt().isAfter(LocalDateTime.now())) {
+            throw new BusinessRuleException("SLOT_IN_PAST", "That time has already passed. Please pick a later one.");
+        }
+        if (!entitlementService.hasSessionValidOn(userId, professionalType, slot.getStartAt())) {
+            throw new BusinessRuleException("SLOT_AFTER_PLAN_EXPIRY", "That date is after your plan ends. Please pick an earlier one.");
+        }
+        if (professionalType == Role.PEDIATRICIAN || professionalType == Role.POSTPARTUM_PHYSIOTHERAPIST) {
+            Journey journey = journeyRepository.findByUserIdAndStatusNot(userId, JourneyStatus.CLOSED).orElse(null);
+            boolean pregnant = journey != null
+                    && (journey.getStatus() == JourneyStatus.PREGNANCY || journey.getStatus() == JourneyStatus.PRE_DELIVERY);
+            if (pregnant && journey.getExpectedDeliveryDate() != null
+                    && slot.getStartAt().toLocalDate().isBefore(journey.getExpectedDeliveryDate())) {
+                throw new BusinessRuleException("SESSION_NOT_FOR_STAGE", "This session is for after your baby arrives. Please pick a date from your due date onwards.");
+            }
+        }
+    }
+
+    private void requireNotStarted(Booking booking) {
+        if (!booking.getScheduledStart().isAfter(LocalDateTime.now())) {
+            throw new BusinessRuleException("BOOKING_ALREADY_STARTED", "This session has already started, so it can't be changed.");
+        }
     }
 
     public List<Booking> listForUser(Long userId) {
@@ -126,6 +163,7 @@ public class BookingService {
     @Transactional
     public Booking cancelBooking(Booking booking, Long actorUserId, String reason) {
         requireStatus(booking, "cancel", BookingStatus.BOOKED);
+        requireNotStarted(booking);
         booking.setStatus(BookingStatus.CANCELLED);
         booking.setCancelledAt(LocalDateTime.now());
         booking.setCancelledByUserId(actorUserId);
@@ -140,9 +178,11 @@ public class BookingService {
     @Transactional
     public Booking rescheduleBooking(Booking booking, Long actorUserId, Long newSlotId, String reason) {
         requireStatus(booking, "reschedule", BookingStatus.BOOKED);
+        requireNotStarted(booking);
 
         ProviderSlot newSlot = providerSlotRepository.findById(newSlotId)
                 .orElseThrow(() -> new SlotNotAvailableException("No such slot: " + newSlotId));
+        requireBookable(booking.getUserId(), booking.getProfessionalType(), newSlot);
         if (providerSlotRepository.claimSlot(newSlotId) == 0) {
             throw new SlotNotAvailableException("Slot " + newSlotId + " is no longer available.");
         }
@@ -174,6 +214,7 @@ public class BookingService {
 
         auditService.record("BOOKING_RESCHEDULED", "Booking", String.valueOf(booking.getId()), reason,
                 Map.of("newBookingId", saved.getId(), "newSlotId", newSlot.getId()));
+        saved.setTimingNote(sessionWindowService.timingNote(booking.getUserId(), saved.getProfessionalType(), newSlot.getStartAt().toLocalDate()));
         return saved;
     }
 

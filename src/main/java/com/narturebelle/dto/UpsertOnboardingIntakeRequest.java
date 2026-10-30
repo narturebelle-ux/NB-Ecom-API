@@ -1,5 +1,6 @@
 package com.narturebelle.dto;
 
+import jakarta.validation.constraints.Pattern;
 import com.narturebelle.model.Modality;
 import com.narturebelle.model.RiskFactor;
 import jakarta.validation.constraints.NotBlank;
@@ -16,16 +17,16 @@ public class UpsertOnboardingIntakeRequest {
     private Boolean multiples;
     private Set<RiskFactor> riskFactors;
     private Set<@Size(max = 100) String> supportWanted;
-    private String city;
+    @Size(max = 255) private String city;
     /** Older clients: a single language. Ignored when {@link #languages} is sent. */
-    private String language;
+    @Size(max = 50) private String language;
 
     /** Preferred first; 1-10 entries. When omitted, [language] is used. */
     @Size(max = 10)
     private List<@NotBlank @Size(max = 50) String> languages;
 
     private Modality preferredModality;
-    private String phone;
+    @Pattern(regexp = InputRules.PHONE, message = InputRules.PHONE_MESSAGE) private String phone;
 
     @Size(max = 2000)
     private String notes;

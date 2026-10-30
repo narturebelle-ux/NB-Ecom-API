@@ -731,5 +731,82 @@ shared is rewarded; friends pay normally.
 A friend qualifies when her first real (price > 0) order becomes PAID. This is processed after the payment commits, so a
 referral problem can never affect a payment. Signed-in endpoints need TERMS + PRIVACY consent.
 
+## 17. Constant prices, session date suggestions and input rules
+
+**Error shape is unchanged.** Field problems: `400 {code: "VALIDATION_FAILED", message, fields: {field: message}}`. Not-allowed-now: `409 {code, message}`.
+
+### 17.1 Prices are constant
+This replaces due-date pricing.
+- Every plan costs its listed price with its full sessions, whatever her due date or health answers.
+- `GET /me/plans/quote` still works, but `basis` is always `FULL_PLAN`, `months` is always 9, and `oneTimePrice` equals `fullOneTimePrice`. The UI can use public `GET /plans` everywhere.
+- `409 DUE_DATE_LOCKED` no longer exists: the due date can be corrected after buying.
+- Health checkboxes only choose which plan the UI *recommends*. Say so clearly, so a different recommendation doesn't read as a price change.
+- Plans last `validityDays` (365) from purchase.
+
+**One plan at a time.** `POST /orders` returns `409 PLAN_ALREADY_ACTIVE` while a paid plan's 12 months are running, even if its sessions are used up. A new checkout replaces an unfinished one: the old order becomes `FAILED` and can't grant a plan.
+
+### 17.2 Suggested session dates
+`GET /api/v1/me/care/session-windows` (signed in, TERMS + PRIVACY) returns:
+
+```
+{ dueDate, weeksRemaining, guidanceOnly,
+  windows: [{ professionalType, title, description, from, to, current, optional }] }
+```
+
+- Ranges are worked out from her due date: trimesters are weeks 1-13, 14-27 and 28-36; pre-delivery is week 37 to the due date; after birth is 6 weeks, then to 6 months.
+- Finished ranges are left out, `from` is never before today, and `current` means today is inside the range.
+- With no due date, `dueDate` and `weeksRemaining` are null and `windows` is empty.
+- **While `guidanceOnly` is true, label this "general guidance", not medical advice:** the timings aren't clinically approved yet.
+
+### 17.3 Booking cross-checks
+`POST /bookings` and `POST /bookings/{id}/reschedule`:
+
+| Code (409) | When |
+|---|---|
+| `SLOT_IN_PAST` | The slot has already started |
+| `SLOT_AFTER_PLAN_EXPIRY` | She has no unused session of this type on a plan still valid on that date |
+| `SESSION_NOT_FOR_STAGE` | Pediatrician or postpartum physiotherapist, while pregnant, dated before her due date |
+
+Outside a suggested range the booking still succeeds, and the response has a `timingNote` to show her (absent otherwise).
+
+Cancel and reschedule work any time before the session starts; after that, `409 BOOKING_ALREADY_STARTED`.
+
+### 17.4 Dates
+Future dates are only allowed for the due date, session and slot dates, admin-scheduled events and record-share expiry.
+
+| Field | Rule |
+|---|---|
+| `expectedDeliveryDate`, status `PREGNANCY`/`PRE_DELIVERY` | Required; today to 42 weeks ahead |
+| `expectedDeliveryDate`, status `DELIVERY_COMPLETED`/`POSTPARTUM` | Optional; not in the future |
+| Lead form `dueDate` | Optional; today to 42 weeks ahead |
+| Credential `issuedAt` | Not in the future |
+| Credential `expiresAt` | After `issuedAt`, and not already expired |
+
+Child date of birth and vaccination dates were already checked.
+
+### 17.5 Formats
+- **Phone**: Indian mobile only. Optional `+91`, then 10 digits starting 6-9; one space or hyphen allowed after `+91` and after the fifth digit. Pattern: `((\+91[ -]?)?[6-9][0-9]{4}[ -]?[0-9]{5})?`. Applies to profile `phone`, onboarding `phone`, lead `phone`, nurse-booking `clientPhone`, doctor-RSVP `phone` and careers `phone`. Profile and onboarding store it as `+91XXXXXXXXXX`.
+- **PIN code**: 6 digits, not starting with 0 (lead and hospital `pincode`).
+- **Links**: must start with `https://`, blank allowed: event `joinUrl`, coordinator `photoUrl`, hospital `consultationUrl`/`imageUrl`, checklist `partnerBookingUrl`, product `imageUrl`, careers `linkedinUrl`/`portfolioUrl`.
+
+### 17.6 Length limits
+These used to crash with a 500 when too long.
+
+| Limit | Fields |
+|---|---|
+| 5000 | Session `note` (complete, amend) |
+| 2000 | Session feedback `comment`; provider `bio`; service `description` |
+| 1500 | Nurse-booking `notes` |
+| 255 | Every `reason` (cancel, reschedule, no-show, amend, refund, provider status, verify, feature flag); `typedName`; provider `displayName`/`city`; service `name`; credential `credentialType`/`documentReference`; record `fileName`/`originalFileName`; lead `name`/`city`/`leadSource`; nurse `clientName`/`preferredLanguage`/`city`; RSVP `motherName`/`userQuestion`; onboarding `city` |
+| 254 | Lead `email`, nurse `clientEmail`, RSVP `email` |
+| 100 | Profile `firstName`, `lastName` |
+| 50 | Onboarding `language` |
+
+### 17.7 Other rules
+- **Slots** (`fields.slots`): end after start, not starting in the past, at most 8 hours, and no overlap with that provider's or coordinator's other slots or within the same request.
+- **Service** `durationMinutes`: at most 480.
+- **Product** `originalPrice`: not lower than `price`.
+- **Document signing** `typedName`: must match the account's name, ignoring case and spacing. Skipped if the account has no name.
+
 ## Quick product/content endpoints (no auth needed, safe to build against today)
 `GET /api/v1/products`, `/api/v1/checklists`, `/api/v1/hospitals`, `/api/v1/doctor-sessions`, `/api/v1/nurse-companion/packages`, `/api/v1/features`, `/api/v1/consent-documents/current`, `/api/v1/plans`, `/api/v1/plans/{id}`, `/api/v1/providers`, `/api/v1/providers/{id}`, `/api/v1/providers/{id}/slots` — all public, all working, full details in Swagger.

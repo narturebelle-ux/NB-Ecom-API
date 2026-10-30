@@ -1,5 +1,6 @@
 package com.narturebelle.dto;
 
+import jakarta.validation.constraints.Size;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -13,7 +14,7 @@ public class CreateRefundRequest {
     private BigDecimal amount;
 
     @NotBlank
-    private String reason;
+    @Size(max = 255) private String reason;
 
     public BigDecimal getAmount() { return amount; }
     public void setAmount(BigDecimal amount) { this.amount = amount; }

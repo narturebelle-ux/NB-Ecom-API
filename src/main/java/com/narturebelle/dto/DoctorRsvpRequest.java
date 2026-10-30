@@ -1,5 +1,7 @@
 package com.narturebelle.dto;
 
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import com.narturebelle.model.PregnancyStage;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -8,15 +10,15 @@ public class DoctorRsvpRequest {
     private Long sessionId;
 
     @NotBlank
-    private String motherName;
+    @Size(max = 255) private String motherName;
 
     @NotBlank
-    private String phone;
+    @Pattern(regexp = InputRules.PHONE, message = InputRules.PHONE_MESSAGE) private String phone;
 
     @Email
-    private String email;
+    @Size(max = 254) private String email;
     private PregnancyStage stage;
-    private String userQuestion;
+    @Size(max = 255) private String userQuestion;
 
     public DoctorRsvpRequest() {}
 

@@ -1,5 +1,7 @@
 package com.narturebelle.dto;
 
+import jakarta.validation.constraints.PastOrPresent;
+import jakarta.validation.constraints.Size;
 import jakarta.validation.constraints.NotBlank;
 
 import java.time.LocalDate;
@@ -7,10 +9,10 @@ import java.time.LocalDate;
 public class CreateCredentialRequest {
 
     @NotBlank
-    private String credentialType;
+    @Size(max = 255) private String credentialType;
 
-    private String documentReference;
-    private LocalDate issuedAt;
+    @Size(max = 255) private String documentReference;
+    @PastOrPresent private LocalDate issuedAt;
     private LocalDate expiresAt;
 
     public String getCredentialType() { return credentialType; }

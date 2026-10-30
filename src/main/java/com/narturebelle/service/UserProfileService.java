@@ -1,5 +1,6 @@
 package com.narturebelle.service;
 
+import com.narturebelle.dto.InputRules;
 import com.narturebelle.dto.UpdateProfileRequest;
 import com.narturebelle.exception.PhoneInUseException;
 import com.narturebelle.exception.UserProfileNotFoundException;
@@ -39,7 +40,7 @@ public class UserProfileService {
             user.setLastName(req.getLastName().trim());
         }
         if (req.getPhone() != null && !req.getPhone().isBlank()) {
-            String newPhone = req.getPhone().trim();
+            String newPhone = InputRules.normalisePhone(req.getPhone());
             Optional<User> existingPhone = userRepository.findByPhone(newPhone);
             if (existingPhone.isPresent() && !existingPhone.get().getId().equals(user.getId())) {
                 throw new PhoneInUseException("Phone number already in use by another account.");

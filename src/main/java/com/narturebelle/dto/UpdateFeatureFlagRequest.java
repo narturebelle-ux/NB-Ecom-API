@@ -1,5 +1,6 @@
 package com.narturebelle.dto;
 
+import jakarta.validation.constraints.Size;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
@@ -9,7 +10,7 @@ public class UpdateFeatureFlagRequest {
     private Boolean enabled;
 
     @NotBlank
-    private String reason;
+    @Size(max = 255) private String reason;
 
     public Boolean getEnabled() { return enabled; }
     public void setEnabled(Boolean enabled) { this.enabled = enabled; }

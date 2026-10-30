@@ -1,5 +1,6 @@
 package com.narturebelle.controller;
 
+import com.narturebelle.dto.InputRules;
 import com.narturebelle.dto.LeadAssessmentRequest;
 import com.narturebelle.model.LeadProfile;
 import com.narturebelle.model.Product;
@@ -35,6 +36,7 @@ public class LeadController {
         lead.setEmail(request.getEmail());
         lead.setPhone(request.getPhone());
         lead.setStage(request.getStage());
+        if (request.getDueDate() != null) InputRules.requireDueDate("dueDate", request.getDueDate());
         lead.setDueDate(request.getDueDate());
         lead.setCity(request.getCity());
         lead.setPincode(request.getPincode());
@@ -70,6 +72,7 @@ public class LeadController {
         lead.setStage(request.getStage());
         lead.setCity(request.getCity());
         lead.setPincode(request.getPincode());
+        if (request.getDueDate() != null) InputRules.requireDueDate("dueDate", request.getDueDate());
         lead.setDueDate(request.getDueDate());
         lead.setLeadSource("CHECKLIST_UNLOCK");
 

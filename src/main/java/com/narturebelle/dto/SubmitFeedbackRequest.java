@@ -1,5 +1,6 @@
 package com.narturebelle.dto;
 
+import jakarta.validation.constraints.Size;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
@@ -11,7 +12,7 @@ public class SubmitFeedbackRequest {
     @Max(5)
     private Integer rating;
 
-    private String comment;
+    @Size(max = 2000) private String comment;
 
     public Integer getRating() { return rating; }
     public void setRating(Integer rating) { this.rating = rating; }

@@ -12,6 +12,8 @@ import java.util.List;
 
 public interface OnboardingCallSlotRepository extends JpaRepository<OnboardingCallSlot, Long> {
 
+    boolean existsByCoordinatorIdAndStartAtBeforeAndEndAtAfter(Long coordinatorId, LocalDateTime end, LocalDateTime start);
+
     List<OnboardingCallSlot> findByStatusAndStartAtAfterOrderByStartAtAsc(SlotStatus status, LocalDateTime after);
 
     /** Conditional claim, same pattern as ProviderSlotRepository.claimSlot: 0 rows means lost the race. */

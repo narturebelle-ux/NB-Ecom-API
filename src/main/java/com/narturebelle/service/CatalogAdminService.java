@@ -1,5 +1,6 @@
 package com.narturebelle.service;
 
+import com.narturebelle.exception.InputValidationException;
 import com.narturebelle.dto.ChecklistTaskRequest;
 import com.narturebelle.dto.HospitalPartnerRequest;
 import com.narturebelle.dto.ProductRequest;
@@ -126,6 +127,9 @@ public class CatalogAdminService {
         product.setName(req.getName());
         product.setDescription(req.getDescription());
         product.setPrice(req.getPrice());
+        if (req.getOriginalPrice() != null && req.getOriginalPrice().compareTo(req.getPrice()) < 0) {
+            throw new InputValidationException("originalPrice", "Original price can't be lower than the sale price.");
+        }
         product.setOriginalPrice(req.getOriginalPrice());
         product.setStage(req.getStage());
         product.setTier(req.getTier());

@@ -138,6 +138,12 @@ public class PaymentService {
                 referralService.onOrderPaid(order);
             }
         }
+        if (order.getStatus() == OrderStatus.FAILED) {
+            // Replaced by a newer checkout, or already failed: money arrived for an order that's closed. Flag it for
+            // a person to refund rather than granting a second plan.
+            auditService.record("PAYMENT_ON_CLOSED_ORDER", "Order", String.valueOf(order.getId()), "Payment succeeded on a closed order");
+            return;
+        }
         entitlementService.grantForOrder(order);
     }
 

@@ -25,6 +25,7 @@ public class BookingResponse {
     private LocalDateTime cancelledAt;
     private String cancelReason;
     private Long rescheduledFromBookingId;
+    private String timingNote;
     private LocalDateTime createdAt;
 
     public static BookingResponse from(Booking booking) {
@@ -46,6 +47,7 @@ public class BookingResponse {
         dto.cancelledAt = booking.getCancelledAt();
         dto.cancelReason = booking.getCancelReason();
         dto.rescheduledFromBookingId = booking.getRescheduledFromBookingId();
+        dto.timingNote = booking.getTimingNote();
         dto.createdAt = booking.getCreatedAt();
         return dto;
     }
@@ -66,6 +68,7 @@ public class BookingResponse {
     public LocalDateTime getNoShowAt() { return noShowAt; }
     public LocalDateTime getCancelledAt() { return cancelledAt; }
     public String getCancelReason() { return cancelReason; }
+    public String getTimingNote() { return timingNote; }
     public Long getRescheduledFromBookingId() { return rescheduledFromBookingId; }
     public LocalDateTime getCreatedAt() { return createdAt; }
 }

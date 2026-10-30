@@ -1,5 +1,7 @@
 package com.narturebelle.dto;
 
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import com.narturebelle.model.PregnancyStage;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -7,19 +9,19 @@ import java.time.LocalDate;
 import java.util.List;
 
 public class LeadAssessmentRequest {
-    private String name;
+    @Size(max = 255) private String name;
 
     @Email
-    private String email;
+    @Size(max = 254) private String email;
 
     @NotBlank
-    private String phone;
+    @Pattern(regexp = InputRules.PHONE, message = InputRules.PHONE_MESSAGE) private String phone;
     private PregnancyStage stage;
     private LocalDate dueDate;
-    private String city;
-    private String pincode;
+    @Size(max = 255) private String city;
+    @Pattern(regexp = InputRules.PINCODE, message = InputRules.PINCODE_MESSAGE) private String pincode;
     private List<String> symptoms;
-    private String leadSource;
+    @Size(max = 255) private String leadSource;
 
     public LeadAssessmentRequest() {}
 

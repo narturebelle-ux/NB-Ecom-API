@@ -1,5 +1,6 @@
 package com.narturebelle.dto;
 
+import jakarta.validation.constraints.Size;
 import com.narturebelle.model.NoShowParty;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -10,7 +11,7 @@ public class NoShowRequest {
     private NoShowParty party;
 
     @NotBlank
-    private String reason;
+    @Size(max = 255) private String reason;
 
     public NoShowParty getParty() { return party; }
     public void setParty(NoShowParty party) { this.party = party; }

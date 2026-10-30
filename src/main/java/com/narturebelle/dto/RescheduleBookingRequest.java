@@ -1,5 +1,6 @@
 package com.narturebelle.dto;
 
+import jakarta.validation.constraints.Size;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
@@ -9,7 +10,7 @@ public class RescheduleBookingRequest {
     private Long newSlotId;
 
     @NotBlank
-    private String reason;
+    @Size(max = 255) private String reason;
 
     public Long getNewSlotId() { return newSlotId; }
     public void setNewSlotId(Long newSlotId) { this.newSlotId = newSlotId; }

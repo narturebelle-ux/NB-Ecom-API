@@ -1,5 +1,7 @@
 package com.narturebelle.dto;
 
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
 
 /**
@@ -8,9 +10,9 @@ import java.time.LocalDate;
  */
 public class UpdateProfileRequest {
 
-    private String firstName;
-    private String lastName;
-    private String phone;
+    @Size(max = 100) private String firstName;
+    @Size(max = 100) private String lastName;
+    @Pattern(regexp = InputRules.PHONE, message = InputRules.PHONE_MESSAGE) private String phone;
     private String stage;
     private LocalDate dueDate;
 

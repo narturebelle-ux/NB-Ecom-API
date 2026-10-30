@@ -1,5 +1,7 @@
 package com.narturebelle.dto;
 
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Size;
 import com.narturebelle.model.Modality;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -8,16 +10,16 @@ import jakarta.validation.constraints.Positive;
 public class CreateServiceOfferingRequest {
 
     @NotBlank
-    private String name;
+    @Size(max = 255) private String name;
 
-    private String description;
+    @Size(max = 2000) private String description;
 
     @NotNull
     private Modality modality;
 
     @NotNull
     @Positive
-    private Integer durationMinutes;
+    @Max(480) private Integer durationMinutes;
 
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }

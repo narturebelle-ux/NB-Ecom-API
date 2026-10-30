@@ -10,8 +10,8 @@ import java.math.BigDecimal;
 import java.util.List;
 
 /**
- * A plan priced for some number of months. GET /plans lists the full 9-month plans; GET /me/plans/quote
- * prices them for her remaining months (see PlanPricing). monthlyPrice is the listed price / 9.
+ * A plan at its constant listed price (see PlanPricing). months is always 9 and fullOneTimePrice equals
+ * oneTimePrice; both stay so existing clients keep working. monthlyPrice is the listed price / 9.
  */
 public class PlanResponse {
 
@@ -32,30 +32,23 @@ public class PlanResponse {
 
     public static PlanResponse from(Long planId, PlanCode code, String name, PlanVersion version,
                                      List<PlanEntitlement> allocations) {
-        return forMonths(planId, code, name, version, allocations, PlanPricing.FULL_MONTHS);
-    }
-
-    public static PlanResponse forMonths(Long planId, PlanCode code, String name, PlanVersion version,
-                                         List<PlanEntitlement> allocations, int months) {
         PlanResponse dto = new PlanResponse();
         dto.id = planId;
         dto.code = code;
         dto.name = name;
-        dto.months = months;
-        dto.monthlyPrice = PlanPricing.prorate(version.getOneTimePrice(), 1);
+        dto.months = PlanPricing.FULL_MONTHS;
+        dto.monthlyPrice = PlanPricing.monthlyRate(version.getOneTimePrice());
         dto.fullOneTimePrice = version.getOneTimePrice();
-        dto.oneTimePrice = PlanPricing.prorate(version.getOneTimePrice(), months);
-        dto.installmentTotalPrice = PlanPricing.prorate(version.getInstallmentTotalPrice(), months);
-        dto.installmentCount = PlanPricing.installmentCount(version.getInstallmentCount(), months);
+        dto.oneTimePrice = version.getOneTimePrice();
+        dto.installmentTotalPrice = version.getInstallmentTotalPrice();
+        dto.installmentCount = version.getInstallmentCount();
         dto.validityDays = version.getValidityDays();
         dto.inclusions = version.getInclusions();
         dto.exclusions = version.getExclusions();
         dto.allocations = allocations.stream()
-                .map(a -> new AllocationItem(a.getProfessionalType(), PlanPricing.prorateSessions(a.getSessionCount(), months)))
+                .map(a -> new AllocationItem(a.getProfessionalType(), a.getSessionCount()))
                 .toList();
-        dto.totalSessions = months >= PlanPricing.FULL_MONTHS
-                ? version.getTotalSessions()
-                : dto.allocations.stream().mapToInt(AllocationItem::sessionCount).sum();
+        dto.totalSessions = version.getTotalSessions();
         return dto;
     }
 

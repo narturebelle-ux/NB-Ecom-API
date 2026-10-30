@@ -68,6 +68,14 @@ public class EntitlementService {
         return entitlementRepository.findByUserIdOrderByCreatedAtDesc(userId);
     }
 
+    /** Does she have an unused session of this type on a plan still valid at that moment? */
+    public boolean hasSessionValidOn(Long userId, Role professionalType, java.time.LocalDateTime when) {
+        return entitlementRepository.findByUserIdOrderByCreatedAtDesc(userId).stream()
+                .anyMatch(e -> e.getProfessionalType() == professionalType
+                        && e.getUsedSessions() < e.getTotalSessions()
+                        && e.getExpiresAt().isAfter(when));
+    }
+
     public boolean hasAvailableSession(Long userId, Role professionalType) {
         return entitlementRepository.existsConsumable(userId, professionalType, LocalDateTime.now());
     }

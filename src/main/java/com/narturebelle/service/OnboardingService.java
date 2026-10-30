@@ -1,5 +1,6 @@
 package com.narturebelle.service;
 
+import com.narturebelle.exception.InputValidationException;
 import com.narturebelle.dto.BookOnboardingCallRequest;
 import com.narturebelle.dto.CreateCallbackRequestRequest;
 import com.narturebelle.dto.CreateOnboardingCallSlotsRequest;
@@ -108,7 +109,7 @@ public class OnboardingService {
         intake.setLanguages(new ArrayList<>(languages));
         intake.setLanguage(languages.isEmpty() ? null : languages.get(0));
         intake.setPreferredModality(req.getPreferredModality());
-        intake.setPhone(req.getPhone());
+        intake.setPhone(com.narturebelle.dto.InputRules.normalisePhone(req.getPhone()));
         intake.setNotes(req.getNotes());
         OnboardingIntake saved = onboardingIntakeRepository.save(intake);
         // Metadata intentionally carries no notes content -- only that an intake was saved.
@@ -203,11 +204,18 @@ public class OnboardingService {
     }
 
     public List<OnboardingCallSlot> createCallSlots(CreateOnboardingCallSlotsRequest req) {
+        java.util.Map<Long, List<LocalDateTime[]>> checkedByCoordinator = new java.util.HashMap<>();
         for (CreateOnboardingCallSlotsRequest.SlotWindow window : req.getSlots()) {
             coordinatorRepository.findById(window.getCoordinatorId())
                     .filter(Coordinator::isActive)
                     .orElseThrow(() -> new CoordinatorNotFoundException(
                             "Active coordinator " + window.getCoordinatorId() + " not found."));
+            SlotRules.check(window.getStartAt(), window.getEndAt(),
+                    checkedByCoordinator.computeIfAbsent(window.getCoordinatorId(), id -> new java.util.ArrayList<>()));
+            if (onboardingCallSlotRepository.existsByCoordinatorIdAndStartAtBeforeAndEndAtAfter(
+                    window.getCoordinatorId(), window.getEndAt(), window.getStartAt())) {
+                throw new InputValidationException("slots", "That time overlaps a slot this coordinator already has.");
+            }
         }
         return req.getSlots().stream().map(window -> {
             OnboardingCallSlot slot = new OnboardingCallSlot();
@@ -217,6 +225,25 @@ public class OnboardingService {
             slot.setStatus(SlotStatus.OPEN);
             return onboardingCallSlotRepository.save(slot);
         }).toList();
+    }
+
+    /** The typed signature must be her name on the account (case and spacing don't matter). No name on file: can't compare. */
+    private void requireAccountName(Long userId, String typedName) {
+        User user = userRepository.findById(userId).orElse(null);
+        if (user == null) return;
+        String first = user.getFirstName() == null ? "" : user.getFirstName();
+        String last = user.getLastName() == null ? "" : user.getLastName();
+        String fullName = normaliseName(first + " " + last);
+        String accountName = normaliseName(user.getName() == null ? "" : user.getName());
+        if (fullName.isEmpty() && accountName.isEmpty()) return;
+        String typed = normaliseName(typedName);
+        if (!typed.equals(fullName) && !typed.equals(accountName)) {
+            throw new InputValidationException("typedName", "Please type your full name as it appears on your account.");
+        }
+    }
+
+    private static String normaliseName(String name) {
+        return name.trim().replaceAll("\\s+", " ").toLowerCase(java.util.Locale.ROOT);
     }
 
     public List<OnboardingDocument> listActiveDocuments() {
@@ -248,6 +275,8 @@ public class OnboardingService {
         OnboardingDocument document = onboardingDocumentRepository.findById(req.getDocumentId())
                 .orElseThrow(() -> new OnboardingDocumentNotFoundException(
                         "Onboarding document " + req.getDocumentId() + " not found."));
+
+        requireAccountName(userId, req.getTypedName());
 
         OnboardingDocumentSignature signature = new OnboardingDocumentSignature();
         signature.setDocumentId(document.getId());

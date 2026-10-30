@@ -112,21 +112,20 @@ class JourneyTest {
         mockMvc.perform(post("/api/v1/me/journeys")
                         .header("Authorization", "Bearer " + TOKEN_UNCONSENTED)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"status\":\"PREGNANCY\"}"))
+                        .content("{\"status\":\"PREGNANCY\",\"expectedDeliveryDate\":\"" + java.time.LocalDate.now().plusDays(100) + "\"}"))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("CONSENT_REQUIRED"));
     }
 
     @Test
-    void create_withoutEdd_hasNullGestationalFields() throws Exception {
+    void create_pregnancyWithoutDueDate_isRejected() throws Exception {
         mockMvc.perform(post("/api/v1/me/journeys")
                         .header("Authorization", "Bearer " + TOKEN_A)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"status\":\"PREGNANCY\"}"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("PREGNANCY"))
-                .andExpect(jsonPath("$.gestationalWeek").doesNotExist())
-                .andExpect(jsonPath("$.trimester").doesNotExist());
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.fields.expectedDeliveryDate").exists());
     }
 
     @Test
@@ -158,13 +157,13 @@ class JourneyTest {
         mockMvc.perform(post("/api/v1/me/journeys")
                         .header("Authorization", "Bearer " + TOKEN_A)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"status\":\"PREGNANCY\"}"))
+                        .content("{\"status\":\"PREGNANCY\",\"expectedDeliveryDate\":\"" + java.time.LocalDate.now().plusDays(100) + "\"}"))
                 .andExpect(status().isOk());
 
         mockMvc.perform(post("/api/v1/me/journeys")
                         .header("Authorization", "Bearer " + TOKEN_A)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"status\":\"PREGNANCY\"}"))
+                        .content("{\"status\":\"PREGNANCY\",\"expectedDeliveryDate\":\"" + java.time.LocalDate.now().plusDays(100) + "\"}"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("JOURNEY_ALREADY_ACTIVE"));
     }
@@ -174,7 +173,7 @@ class JourneyTest {
         String body = mockMvc.perform(post("/api/v1/me/journeys")
                         .header("Authorization", "Bearer " + TOKEN_A)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"status\":\"PREGNANCY\"}"))
+                        .content("{\"status\":\"PREGNANCY\",\"expectedDeliveryDate\":\"" + java.time.LocalDate.now().plusDays(100) + "\"}"))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
         Long journeyId = Long.valueOf(body.replaceAll(".*\"id\":(\\d+).*", "$1"));
@@ -196,7 +195,7 @@ class JourneyTest {
         String body = mockMvc.perform(post("/api/v1/me/journeys")
                         .header("Authorization", "Bearer " + TOKEN_A)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"status\":\"PREGNANCY\"}"))
+                        .content("{\"status\":\"PREGNANCY\",\"expectedDeliveryDate\":\"" + java.time.LocalDate.now().plusDays(100) + "\"}"))
                 .andReturn().getResponse().getContentAsString();
         Long journeyId = Long.valueOf(body.replaceAll(".*\"id\":(\\d+).*", "$1"));
 
@@ -220,7 +219,7 @@ class JourneyTest {
         String body = mockMvc.perform(post("/api/v1/me/journeys")
                         .header("Authorization", "Bearer " + TOKEN_A)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"status\":\"PREGNANCY\"}"))
+                        .content("{\"status\":\"PREGNANCY\",\"expectedDeliveryDate\":\"" + java.time.LocalDate.now().plusDays(100) + "\"}"))
                 .andReturn().getResponse().getContentAsString();
         Long journeyId = Long.valueOf(body.replaceAll(".*\"id\":(\\d+).*", "$1"));
 
@@ -234,7 +233,7 @@ class JourneyTest {
         mockMvc.perform(post("/api/v1/me/journeys")
                         .header("Authorization", "Bearer " + TOKEN_A)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"status\":\"PREGNANCY\"}"))
+                        .content("{\"status\":\"PREGNANCY\",\"expectedDeliveryDate\":\"" + java.time.LocalDate.now().plusDays(100) + "\"}"))
                 .andExpect(status().isOk());
     }
 }

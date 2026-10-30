@@ -8,6 +8,8 @@ import com.narturebelle.model.Order;
 import com.narturebelle.model.OrderStatus;
 import com.narturebelle.model.PaymentMode;
 import com.narturebelle.model.PlanVersion;
+import com.narturebelle.exception.BusinessRuleException;
+import com.narturebelle.repository.EntitlementRepository;
 import com.narturebelle.repository.InstallmentScheduleRepository;
 import com.narturebelle.repository.OrderRepository;
 import com.narturebelle.security.AuditService;
@@ -20,6 +22,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -31,15 +34,15 @@ public class OrderService {
     private final InstallmentScheduleRepository installmentScheduleRepository;
     private final PlanService planService;
     private final AuditService auditService;
-    private final PlanPricing planPricing;
+    private final EntitlementRepository entitlementRepository;
 
     public OrderService(OrderRepository orderRepository, InstallmentScheduleRepository installmentScheduleRepository,
-                         PlanService planService, AuditService auditService, PlanPricing planPricing) {
+                         PlanService planService, AuditService auditService, EntitlementRepository entitlementRepository) {
         this.orderRepository = orderRepository;
         this.installmentScheduleRepository = installmentScheduleRepository;
         this.planService = planService;
         this.auditService = auditService;
-        this.planPricing = planPricing;
+        this.entitlementRepository = entitlementRepository;
     }
 
     public Order createOrder(Long userId, CreateOrderRequest req, String idempotencyKey) {
@@ -57,11 +60,13 @@ public class OrderService {
         PlanVersion planVersion = planService.findActiveVersion(req.getPlanId())
                 .orElseThrow(() -> new PlanNotFoundException("No active plan found for id " + req.getPlanId()));
 
-        // Priced server-side from her due date at this moment (PlanPricing) -- nothing the client sends affects it.
-        PlanPricing.Duration duration = planPricing.durationFor(userId);
-        BigDecimal price = PlanPricing.prorate(req.getPaymentMode() == PaymentMode.ONE_TIME
+        requireNoActivePlan(userId);
+        supersedeUnpaidOrders(userId);
+
+        // The listed price, decided here -- nothing the client sends affects it.
+        BigDecimal price = req.getPaymentMode() == PaymentMode.ONE_TIME
                 ? planVersion.getOneTimePrice()
-                : planVersion.getInstallmentTotalPrice(), duration.months());
+                : planVersion.getInstallmentTotalPrice();
 
         Order order = new Order();
         order.setUserId(userId);
@@ -71,8 +76,7 @@ public class OrderService {
         order.setStatus(OrderStatus.PENDING);
         order.setPaymentMode(req.getPaymentMode());
         order.setPrice(price);
-        order.setMonths(duration.months());
-        order.setPricedDueDate(duration.dueDate());
+        order.setMonths(PlanPricing.FULL_MONTHS);
 
         Order saved;
         try {
@@ -94,6 +98,25 @@ public class OrderService {
         return saved;
     }
 
+    /** One plan at a time: a paid plan counts until its 12 months end, even if its sessions are used up. */
+    private void requireNoActivePlan(Long userId) {
+        LocalDateTime now = LocalDateTime.now();
+        boolean active = orderRepository.findByUserIdAndStatusIn(userId, List.of(OrderStatus.PAID, OrderStatus.PARTIALLY_REFUNDED)).stream()
+                .anyMatch(order -> entitlementRepository.existsByOrderIdAndExpiresAtAfter(order.getId(), now));
+        if (active) {
+            throw new BusinessRuleException("PLAN_ALREADY_ACTIVE", "You already have an active plan.");
+        }
+    }
+
+    /** A new checkout replaces an unfinished one, so only one order is ever payable and she can't get stuck. */
+    private void supersedeUnpaidOrders(Long userId) {
+        for (Order pending : orderRepository.findByUserIdAndStatusIn(userId, List.of(OrderStatus.PENDING))) {
+            pending.setStatus(OrderStatus.FAILED);
+            orderRepository.save(pending);
+            auditService.record("ORDER_SUPERSEDED", "Order", String.valueOf(pending.getId()), "Replaced by a new checkout");
+        }
+    }
+
     public List<Order> listForUser(Long userId) {
         return orderRepository.findByUserIdOrderByCreatedAtDesc(userId);
     }
@@ -108,7 +131,7 @@ public class OrderService {
 
     /** Placeholder cadence: evenly split, 30 days apart, first installment due immediately. */
     private void generateInstallmentSchedule(Order order, PlanVersion planVersion) {
-        int count = PlanPricing.installmentCount(planVersion.getInstallmentCount(), order.effectiveMonths());
+        int count = Math.max(1, planVersion.getInstallmentCount() == null ? 1 : planVersion.getInstallmentCount());
         BigDecimal total = order.getPrice();
         BigDecimal perInstallment = total.divide(BigDecimal.valueOf(count), 2, RoundingMode.DOWN);
         BigDecimal allocated = BigDecimal.ZERO;
