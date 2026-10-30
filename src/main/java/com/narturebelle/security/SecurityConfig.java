@@ -48,14 +48,21 @@ public class SecurityConfig {
                                 "/api/v1/doctor-sessions/**",
                                 "/api/v1/nurse-companion/**",
                                 "/api/v1/leads/**",
+                                "/api/v1/consent-documents/**",
+                                "/api/v1/plans/**",
+                                "/api/v1/payments/webhook",
+                                "/api/v1/providers/**",
                                 "/swagger-ui.html",
                                 "/swagger-ui/**",
                                 "/v3/api-docs/**"
                         ).permitAll()
                         // Dev-only legacy endpoints (bean only exists outside prod/stage; still explicit here).
                         .requestMatchers("/api/v1/auth/send-otp", "/api/v1/auth/login").permitAll()
-                        // Admin namespace — reserved, no concrete endpoints yet.
-                        .requestMatchers("/api/v1/admin/**").hasAuthority("ROLE_ADMIN")
+                        // Admin namespace (feature flags, refunds, finance view, ...). Any *_ADMIN role qualifies.
+                        .requestMatchers("/api/v1/admin/**").hasAnyAuthority(
+                                "ROLE_CLINIC_ADMIN", "ROLE_HOSPITAL_ADMIN", "ROLE_OPERATIONS_ADMIN",
+                                "ROLE_FINANCE_ADMIN", "ROLE_SECURITY_ADMIN", "ROLE_SUPER_ADMIN"
+                        )
                         // Everything else (auth/firebase, users/me, users/{id}, future endpoints) needs a valid token.
                         .anyRequest().authenticated()
                 )

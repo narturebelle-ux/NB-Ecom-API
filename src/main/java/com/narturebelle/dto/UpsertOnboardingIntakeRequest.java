@@ -1,0 +1,49 @@
+package com.narturebelle.dto;
+
+import com.narturebelle.model.Modality;
+import com.narturebelle.model.RiskFactor;
+import jakarta.validation.constraints.Size;
+
+import java.util.Set;
+
+public class UpsertOnboardingIntakeRequest {
+
+    private Boolean firstPregnancy;
+    private Boolean multiples;
+    private Set<RiskFactor> riskFactors;
+    private Set<@Size(max = 100) String> supportWanted;
+    private String city;
+    private String language;
+    private Modality preferredModality;
+    private String phone;
+
+    @Size(max = 2000)
+    private String notes;
+
+    public Boolean getFirstPregnancy() { return firstPregnancy; }
+    public void setFirstPregnancy(Boolean firstPregnancy) { this.firstPregnancy = firstPregnancy; }
+
+    public Boolean getMultiples() { return multiples; }
+    public void setMultiples(Boolean multiples) { this.multiples = multiples; }
+
+    public Set<RiskFactor> getRiskFactors() { return riskFactors; }
+    public void setRiskFactors(Set<RiskFactor> riskFactors) { this.riskFactors = riskFactors; }
+
+    public Set<String> getSupportWanted() { return supportWanted; }
+    public void setSupportWanted(Set<String> supportWanted) { this.supportWanted = supportWanted; }
+
+    public String getCity() { return city; }
+    public void setCity(String city) { this.city = city; }
+
+    public String getLanguage() { return language; }
+    public void setLanguage(String language) { this.language = language; }
+
+    public Modality getPreferredModality() { return preferredModality; }
+    public void setPreferredModality(Modality preferredModality) { this.preferredModality = preferredModality; }
+
+    public String getPhone() { return phone; }
+    public void setPhone(String phone) { this.phone = phone; }
+
+    public String getNotes() { return notes; }
+    public void setNotes(String notes) { this.notes = notes; }
+}

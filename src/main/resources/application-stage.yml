@@ -8,15 +8,8 @@
 spring:
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate # Flyway owns schema changes now — see application.yml
     show-sql: false
-
-features:
-  nurse-companion: true
-  hospital-leads: true
-  doctor-live-sessions: true
-  assessment-voucher: true
-  baby-care-products: true # Enabled in Staging for QA / feature verification
 
 logging:
   level:

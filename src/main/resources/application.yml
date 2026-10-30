@@ -18,9 +18,16 @@ spring:
   jpa:
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     show-sql: false
     open-in-view: false
+
+  # Flyway owns the schema from here on. baseline-on-migrate=true because real tables already
+  # exist in every non-test DB (created earlier by ddl-auto: update) — this adopts the current
+  # schema as "V1 already applied" instead of trying to re-run CREATE TABLE against it.
+  flyway:
+    baseline-on-migrate: true
+    baseline-version: 1
 
 # Server Port
 server:
@@ -36,15 +43,38 @@ firebase:
   credentials:
     path: classpath:firebase-service-account.json
 
-# =========================================================================
-# FEATURE TOGGLES (Free & Open Source - Governed by Spring Boot Profiles)
-# =========================================================================
-features:
-  nurse-companion: true        # Stream 3: 'Maa Sakhi' Nurse Care plan & on-call triage
-  hospital-leads: true         # Stream 2: Local maternity hospital directory & tour bookings
-  doctor-live-sessions: true   # OB-GYN interactive live streams & RSVP
-  assessment-voucher: true     # Instant ₹100 NARTURE10 discount voucher on diagnostic completion
-  baby-care-products: false    # Future expansion (0-5 years) - hidden by default
+# Feature flags live in the feature_flags DB table now (see V4__feature_flags.sql and
+# AdminFeatureFlagController) — not here. GET /api/v1/features reads the table directly.
+
+# Mock payment provider (Phase 2). Signs/verifies webhook payloads via HMAC-SHA256. The default is
+# fine for local/test — only matters once a real secret needs to be kept out of source control, and
+# MockPaymentProvider never ships past the prototype anyway (Phase 7 replaces it with a real gateway).
+payments:
+  mock:
+    webhook-secret: ${MOCK_PAYMENT_WEBHOOK_SECRET:dev-only-mock-webhook-secret-change-me}
+
+# Supabase Storage (Phase 4) — reuses the same Supabase project as the Postgres DB (same us-east-1
+# region, no new infra account). No defaults on these two: there's no safe degraded mode for
+# storage, unlike Firebase's ADC fallback chain, so fail fast exactly like DB_URL/DB_PASSWORD.
+supabase:
+  url: ${SUPABASE_URL}
+  service-role-key: ${SUPABASE_SERVICE_ROLE_KEY}
+  storage:
+    bucket: ${SUPABASE_STORAGE_BUCKET:health-records}
+
+# Records vault upload/sharing policy knobs — placeholder defaults, flagged in HANDOFF.md.
+records:
+  upload:
+    allowed-mime-types: ${RECORDS_ALLOWED_MIME_TYPES:application/pdf,image/jpeg,image/png,image/heic}
+    max-size-bytes: ${RECORDS_MAX_SIZE_BYTES:26214400}
+  share:
+    max-expiry-days: ${RECORDS_SHARE_MAX_EXPIRY_DAYS:180}
+
+narturebelle:
+  scheduling:
+    # Off in the test profile (see application-test.yml) -- a @Scheduled job firing mid-test would
+    # mutate data a test didn't create. Real default is on.
+    enabled: ${SCHEDULING_ENABLED:true}
 
 # Logging Configuration
 logging:

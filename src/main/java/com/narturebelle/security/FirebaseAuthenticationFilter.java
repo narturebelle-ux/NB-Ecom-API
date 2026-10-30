@@ -1,5 +1,6 @@
 package com.narturebelle.security;
 
+import com.narturebelle.model.Role;
 import com.narturebelle.model.User;
 import com.narturebelle.repository.UserRepository;
 import jakarta.servlet.FilterChain;
@@ -19,6 +20,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Verifies the Authorization: Bearer <Firebase ID token> header on every request via the injected
@@ -61,17 +63,18 @@ public class FirebaseAuthenticationFilter extends OncePerRequestFilter {
             VerifiedFirebaseToken verified = tokenVerifier.verify(token);
             Optional<User> dbUser = userRepository.findByFirebaseUid(verified.uid());
             Long userId = dbUser.map(User::getId).orElse(null);
-            String role = dbUser.map(User::getRole).orElse("USER");
+            Set<Role> roles = dbUser.map(User::getRoles)
+                    .filter(r -> !r.isEmpty())
+                    .orElse(Set.of(Role.MOTHER));
 
             FirebaseUserPrincipal principal = new FirebaseUserPrincipal(
                     userId, verified.uid(), verified.email(), verified.emailVerified(),
-                    verified.phone(), verified.phone() != null, role, verified.name()
+                    verified.phone(), verified.phone() != null, roles, verified.name()
             );
 
             List<GrantedAuthority> authorities = new ArrayList<>();
-            authorities.add(new SimpleGrantedAuthority("ROLE_USER"));
-            if (principal.isAdmin()) {
-                authorities.add(new SimpleGrantedAuthority("ROLE_ADMIN"));
+            for (Role role : roles) {
+                authorities.add(new SimpleGrantedAuthority("ROLE_" + role.name()));
             }
             if (principal.isVerified()) {
                 authorities.add(new SimpleGrantedAuthority("VERIFIED"));

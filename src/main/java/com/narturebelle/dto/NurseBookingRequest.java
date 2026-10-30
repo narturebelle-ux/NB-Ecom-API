@@ -1,10 +1,17 @@
 package com.narturebelle.dto;
 
 import com.narturebelle.model.PregnancyStage;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
 
 public class NurseBookingRequest {
+    @NotBlank
     private String clientName;
+
+    @NotBlank
     private String clientPhone;
+
+    @Email
     private String clientEmail;
     private PregnancyStage currentStage;
     private String preferredLanguage;

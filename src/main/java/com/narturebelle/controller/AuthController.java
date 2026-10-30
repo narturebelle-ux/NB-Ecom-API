@@ -1,8 +1,10 @@
 package com.narturebelle.controller;
 
 import com.narturebelle.dto.UserProfileResponse;
+import com.narturebelle.model.Role;
 import com.narturebelle.model.User;
 import com.narturebelle.repository.UserRepository;
+import com.narturebelle.security.AuditService;
 import com.narturebelle.security.AuthorizationService;
 import com.narturebelle.security.FirebaseUserPrincipal;
 import org.springframework.http.ResponseEntity;
@@ -12,6 +14,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 
 @RestController
 @RequestMapping("/api/v1/auth")
@@ -19,10 +23,13 @@ public class AuthController {
 
     private final UserRepository userRepository;
     private final AuthorizationService authorizationService;
+    private final AuditService auditService;
 
-    public AuthController(UserRepository userRepository, AuthorizationService authorizationService) {
+    public AuthController(UserRepository userRepository, AuthorizationService authorizationService,
+                           AuditService auditService) {
         this.userRepository = userRepository;
         this.authorizationService = authorizationService;
+        this.auditService = auditService;
     }
 
     /**
@@ -34,15 +41,22 @@ public class AuthController {
     public ResponseEntity<UserProfileResponse> syncFirebaseUser() {
         FirebaseUserPrincipal principal = authorizationService.currentPrincipal();
 
-        User user = userRepository.findByFirebaseUid(principal.firebaseUid()).orElseGet(() -> {
+        Optional<User> existing = userRepository.findByFirebaseUid(principal.firebaseUid());
+        boolean isNewUser = existing.isEmpty();
+        User user = existing.orElseGet(() -> {
             User newUser = new User();
             newUser.setFirebaseUid(principal.firebaseUid());
-            newUser.setRole("USER");
-            String[] derivedName = deriveName(principal);
-            newUser.setFirstName(derivedName[0]);
-            newUser.setLastName(derivedName[1]);
+            newUser.setRoles(Set.of(Role.MOTHER));
             return newUser;
         });
+
+        // Covers both brand-new users and legacy existing ones with no name on file (0.7 backfill).
+        // Never touches a user who already has a name - manual edits via PUT/PATCH /me are safe.
+        if (isBlank(user.getFirstName()) && isBlank(user.getLastName())) {
+            String[] derivedName = deriveName(principal);
+            user.setFirstName(derivedName[0]);
+            user.setLastName(derivedName[1]);
+        }
 
         user.setEmail(principal.email());
         user.setEmailVerified(principal.emailVerified());
@@ -52,6 +66,9 @@ public class AuthController {
         }
 
         User saved = userRepository.save(user);
+        if (isNewUser) {
+            auditService.record("USER_CREATED", "User", String.valueOf(saved.getId()), null);
+        }
         return ResponseEntity.ok(UserProfileResponse.from(saved));
     }
 
@@ -83,5 +100,9 @@ public class AuthController {
 
     private static String titleCase(String s) {
         return Character.toUpperCase(s.charAt(0)) + s.substring(1).toLowerCase();
+    }
+
+    private static boolean isBlank(String s) {
+        return s == null || s.isBlank();
     }
 }

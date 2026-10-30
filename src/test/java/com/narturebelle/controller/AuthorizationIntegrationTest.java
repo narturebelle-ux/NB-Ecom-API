@@ -1,5 +1,6 @@
 package com.narturebelle.controller;
 
+import com.narturebelle.model.Role;
 import com.narturebelle.model.User;
 import com.narturebelle.repository.UserRepository;
 import com.narturebelle.security.FirebaseTokenVerifier;
@@ -13,6 +14,8 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+
+import java.util.Set;
 
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -53,21 +56,21 @@ class AuthorizationIntegrationTest {
         userA.setFirebaseUid("uid-a");
         userA.setEmail("a@example.com");
         userA.setEmailVerified(true);
-        userA.setRole("USER");
+        userA.setRoles(Set.of(Role.MOTHER));
         userRepository.save(userA);
 
         User userB = new User();
         userB.setFirebaseUid("uid-b");
         userB.setEmail("b@example.com");
         userB.setEmailVerified(true);
-        userB.setRole("USER");
+        userB.setRoles(Set.of(Role.MOTHER));
         userBId = userRepository.save(userB).getId();
 
         User admin = new User();
         admin.setFirebaseUid("uid-admin");
         admin.setEmail("admin@example.com");
         admin.setEmailVerified(true);
-        admin.setRole("ADMIN");
+        admin.setRoles(Set.of(Role.SUPER_ADMIN));
         userRepository.save(admin);
 
         when(firebaseTokenVerifier.verify(USER_A_TOKEN))
