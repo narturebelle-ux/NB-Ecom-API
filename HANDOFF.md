@@ -280,3 +280,7 @@ Product-owner requirement (relayed by the UI session): admins post/close roles, 
 - **Spam control**: a honeypot field, magic-byte checks on the résumé, and an in-memory per-instance rate limiter (`RateLimiter`). `server.forward-headers-strategy: native` makes the client IP come from Cloud Run's `X-Forwarded-For`.
 
 **Open product-owner decision — retention:** applications and résumés are personal data, and nothing deletes them today. Decide how long to keep them (e.g. 12 months after the role closes) and whether rejected applicants' data goes sooner; then add a scheduled purge.
+
+## 14. Idea pool & Idea Impact
+
+Product-owner design (2026-10-30): signed-in members post ideas into a public pool, in 5 categories (`IdeaCategory`), and vote. Only votes from members with a PAID order count toward the goal (`ideas.vote-goal`, 1,000), which pushes members to share ideas with friends. Implemented ideas (with an admin-written `impactNote`) feature on Idea Impact, naming the author only with her `featureConsent`. The pool is time-limited through the `ideaPool` feature flag (V29), which closes submissions and voting. "Paid" is evaluated at read time in one native query (`IdeaVoteRepository.countVotes`), so a voter who buys a plan later starts counting. Contract in `UI_INTEGRATION_GUIDE.md` §15; covered by `IdeaPoolTest`. The old `/feedback` endpoint is untouched; the referral link + gifts feature comes next, on its own branch.
