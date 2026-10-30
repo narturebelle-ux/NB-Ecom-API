@@ -95,6 +95,10 @@ careers:
   # Careers applications and ideas/feedback go to the hello@ mailbox (product-owner decision, 2026-10-30).
   admin-email: ${CAREERS_ADMIN_EMAIL:hello@narturebelle.com}
 
+# Idea pool: paid members' votes an idea needs before it is considered for implementation.
+ideas:
+  vote-goal: ${IDEAS_VOTE_GOAL:1000}
+
 narturebelle:
   scheduling:
     # Off in the test profile (see application-test.yml) -- a @Scheduled job firing mid-test would

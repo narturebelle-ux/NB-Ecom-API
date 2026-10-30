@@ -682,5 +682,36 @@ Every application (résumé attached, reply-to = the applicant) and every feedba
 - `GET /api/v1/admin/careers/jobs/{id}/applications` → `[{id, jobId, fullName, email, phone, location, linkedinUrl, portfolioUrl, yearsExperience, coverNote, resumeFileName, resumeSizeBytes, submittedAt, adminNotified}]`.
 - `GET /api/v1/admin/careers/applications/{id}/resume` → the file itself (`Content-Disposition: attachment`; fetch with the admin token, save the blob). Every download is audited.
 
+## 15. Idea pool & Idea Impact
+
+Members post ideas into a public pool, in one of five categories, and vote on each other's. **Only votes from
+members with a paid order count toward the goal** (`voteGoal`, 1,000 by default; env `IDEAS_VOTE_GOAL`). That's what
+makes sharing an idea worthwhile: friends sign up, buy a plan and vote. Implemented ideas are celebrated on **Idea Impact**.
+The pool runs for a limited time. The `ideaPool` feature flag (`PATCH /admin/feature-flags/ideaPool`) closes
+submissions and voting while browsing stays up. This is meant as a creative, campaign-style page, not a form.
+
+**Public (a token is optional and adds `votedByMe`/`mine`):**
+- `GET /api/v1/ideas/meta` → `{open, voteGoal, categories:[{code, label, description}]}`. The categories are
+  `CARE_AND_SESSIONS`, `NUTRITION_AND_WELLNESS`, `BABY_AND_POSTPARTUM`, `COMMUNITY`, `APP_EXPERIENCE`.
+- `GET /api/v1/ideas?category=&sort=top|new` → the pool (OPEN, UNDER_REVIEW and IMPLEMENTED). `top` sorts by paid votes, then all votes.
+- `GET /api/v1/ideas/{id}` → one idea. **This is the share-link target.** Declined ideas are 404.
+- `GET /api/v1/ideas/impact` → implemented ideas, newest first. `authorName` is the member's name only if she ticked
+  `featureConsent`; otherwise it's "A NartureBelle mom".
+
+Idea: `{id, number ("IDEA-0042"), category, categoryLabel, title, description, authorName ("Asha R."), status:
+OPEN|UNDER_REVIEW|IMPLEMENTED|DECLINED, votes, paidVotes, voteGoal, goalReached, impactNote, implementedAt, createdAt,
+votedByMe?, mine?, featureConsent? (only on your own)}`.
+
+**Members (signed in, TERMS + PRIVACY consent). Name and email are never asked; they come from the account:**
+- `POST /api/v1/me/ideas` `{category*, title* (≤120), description* (≤1500), featureConsent}` → `201` Idea. Up to 5 a day (`429 TOO_MANY_REQUESTS`).
+  The public pool shows her first name + last initial, so say so on the form.
+- `GET /api/v1/me/ideas` → her ideas with status, votes and `impactNote`.
+- `POST /api/v1/ideas/{id}/vote` / `DELETE …/vote` → the updated Idea. Voting twice is harmless.
+  `409 IDEA_SELF_VOTE` on her own idea, `409 IDEA_NOT_OPEN` once it's no longer OPEN, `409 IDEA_POOL_CLOSED` when the pool is closed, `401` without a token.
+
+**Admin (*_ADMIN):** `GET /api/v1/admin/ideas?status=` and `POST /api/v1/admin/ideas/{id}/status {status, impactNote}`.
+`impactNote` ("what changed", shown publicly) is required for IMPLEMENTED (`400 IMPACT_NOTE_REQUIRED`). The admin inbox is
+emailed when an idea is posted and when one first reaches the goal.
+
 ## Quick product/content endpoints (no auth needed, safe to build against today)
 `GET /api/v1/products`, `/api/v1/checklists`, `/api/v1/hospitals`, `/api/v1/doctor-sessions`, `/api/v1/nurse-companion/packages`, `/api/v1/features`, `/api/v1/consent-documents/current`, `/api/v1/plans`, `/api/v1/plans/{id}`, `/api/v1/providers`, `/api/v1/providers/{id}`, `/api/v1/providers/{id}/slots` — all public, all working, full details in Swagger.
