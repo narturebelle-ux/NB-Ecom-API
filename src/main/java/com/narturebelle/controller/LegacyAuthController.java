@@ -4,6 +4,7 @@ import com.narturebelle.dto.AuthLoginRequest;
 import com.narturebelle.dto.AuthResponse;
 import com.narturebelle.model.User;
 import com.narturebelle.repository.UserRepository;
+import jakarta.validation.Valid;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -38,7 +39,7 @@ public class LegacyAuthController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<AuthResponse> login(@RequestBody AuthLoginRequest request) {
+    public ResponseEntity<AuthResponse> login(@Valid @RequestBody AuthLoginRequest request) {
         User user;
 
         if ("GOOGLE".equalsIgnoreCase(request.getProvider()) && request.getEmail() != null) {

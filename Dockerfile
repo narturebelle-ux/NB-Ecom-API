@@ -4,7 +4,8 @@ WORKDIR /app
 
 COPY gradlew settings.gradle build.gradle ./
 COPY gradle gradle
-RUN chmod +x gradlew
+# Strip CRLF in case the source was uploaded from a Windows checkout (sh would fail on "\r").
+RUN sed -i 's/\r$//' gradlew && chmod +x gradlew
 # Separate layer so dependency downloads are cached across builds unless build.gradle changes.
 RUN ./gradlew --no-daemon dependencies > /dev/null 2>&1 || true
 
@@ -16,6 +17,9 @@ FROM eclipse-temurin:21-jre
 WORKDIR /app
 COPY --from=build /app/build/libs/*.jar app.jar
 
-# Cloud Run injects PORT; application-prod.yml already binds server.port to it.
-EXPOSE 8080
+# Vercel's Container runtime routes to port 80 unless the project sets PORT; server.port reads PORT.
+ENV PORT=80
+EXPOSE 80
+# Use most of the container's memory for the heap (the JVM default is only 25%).
+ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75"
 ENTRYPOINT ["java", "-jar", "app.jar"]

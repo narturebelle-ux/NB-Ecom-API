@@ -1,5 +1,6 @@
 package com.narturebelle.config;
 
+import com.narturebelle.security.ConsentCheckInterceptor;
 import com.narturebelle.security.VerifiedCheckInterceptor;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
@@ -9,13 +10,16 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 public class WebMvcConfig implements WebMvcConfigurer {
 
     private final VerifiedCheckInterceptor verifiedCheckInterceptor;
+    private final ConsentCheckInterceptor consentCheckInterceptor;
 
-    public WebMvcConfig(VerifiedCheckInterceptor verifiedCheckInterceptor) {
+    public WebMvcConfig(VerifiedCheckInterceptor verifiedCheckInterceptor, ConsentCheckInterceptor consentCheckInterceptor) {
         this.verifiedCheckInterceptor = verifiedCheckInterceptor;
+        this.consentCheckInterceptor = consentCheckInterceptor;
     }
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(verifiedCheckInterceptor);
+        registry.addInterceptor(consentCheckInterceptor);
     }
 }

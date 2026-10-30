@@ -1,5 +1,6 @@
 package com.narturebelle.controller;
 
+import com.narturebelle.model.User;
 import com.narturebelle.repository.UserRepository;
 import com.narturebelle.security.FirebaseTokenVerifier;
 import com.narturebelle.security.VerifiedFirebaseToken;
@@ -87,6 +88,24 @@ class SignupNameDerivationTest {
         mockMvc.perform(post("/api/v1/auth/firebase").header("Authorization", "Bearer second-login"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.firstName").value("Original"))
+                .andExpect(jsonPath("$.lastName").value("Name"));
+    }
+
+    @Test
+    void existingUserWithBlankNames_getsBackfilledOnNextLogin() throws Exception {
+        // Simulates a user created before name derivation existed: no firstName/lastName on file.
+        User legacyUser = new User();
+        legacyUser.setFirebaseUid("uid-legacy");
+        legacyUser.setEmail("legacy@gmail.com");
+        legacyUser.setEmailVerified(true);
+        userRepository.save(legacyUser);
+
+        when(firebaseTokenVerifier.verify("legacy-login"))
+                .thenReturn(new VerifiedFirebaseToken("uid-legacy", "legacy@gmail.com", true, null, "Backfilled Name"));
+
+        mockMvc.perform(post("/api/v1/auth/firebase").header("Authorization", "Bearer legacy-login"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.firstName").value("Backfilled"))
                 .andExpect(jsonPath("$.lastName").value("Name"));
     }
 }

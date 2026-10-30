@@ -5,6 +5,7 @@ import com.narturebelle.model.LeadProfile;
 import com.narturebelle.model.Product;
 import com.narturebelle.repository.LeadProfileRepository;
 import com.narturebelle.repository.ProductRepository;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -26,7 +27,7 @@ public class LeadController {
     }
 
     @PostMapping("/assess")
-    public ResponseEntity<Map<String, Object>> submitAssessment(@RequestBody LeadAssessmentRequest request) {
+    public ResponseEntity<Map<String, Object>> submitAssessment(@Valid @RequestBody LeadAssessmentRequest request) {
         LeadProfile lead = leadProfileRepository.findByPhone(request.getPhone())
                 .orElse(new LeadProfile());
 
@@ -59,7 +60,7 @@ public class LeadController {
     }
 
     @PostMapping("/unlock-checklist")
-    public ResponseEntity<Map<String, Object>> unlockChecklist(@RequestBody LeadAssessmentRequest request) {
+    public ResponseEntity<Map<String, Object>> unlockChecklist(@Valid @RequestBody LeadAssessmentRequest request) {
         LeadProfile lead = leadProfileRepository.findByPhone(request.getPhone())
                 .orElse(new LeadProfile());
 

@@ -6,6 +6,7 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
 
@@ -17,26 +18,345 @@ public class DataInitializer implements CommandLineRunner {
     private final HospitalPartnerRepository hospitalPartnerRepository;
     private final NursePackageRepository nursePackageRepository;
     private final DoctorSessionRepository doctorSessionRepository;
+    private final FeatureFlagRepository featureFlagRepository;
+    private final ConsentDocumentRepository consentDocumentRepository;
+    private final CareProtocolStepRepository careProtocolStepRepository;
+    private final PlanRepository planRepository;
+    private final PlanVersionRepository planVersionRepository;
+    private final PlanEntitlementRepository planEntitlementRepository;
+    private final PayoutRateRepository payoutRateRepository;
+    private final OnboardingDocumentRepository onboardingDocumentRepository;
+    private final VaccineScheduleVersionRepository vaccineScheduleVersionRepository;
+    private final VaccineScheduleItemRepository vaccineScheduleItemRepository;
+    private final SampleContentSeeder sampleContentSeeder;
 
     public DataInitializer(ProductRepository productRepository,
                            ChecklistTaskRepository checklistTaskRepository,
                            HospitalPartnerRepository hospitalPartnerRepository,
                            NursePackageRepository nursePackageRepository,
-                           DoctorSessionRepository doctorSessionRepository) {
+                           DoctorSessionRepository doctorSessionRepository,
+                           FeatureFlagRepository featureFlagRepository,
+                           ConsentDocumentRepository consentDocumentRepository,
+                           CareProtocolStepRepository careProtocolStepRepository,
+                           PlanRepository planRepository,
+                           PlanVersionRepository planVersionRepository,
+                           PlanEntitlementRepository planEntitlementRepository,
+                           PayoutRateRepository payoutRateRepository,
+                           OnboardingDocumentRepository onboardingDocumentRepository,
+                           VaccineScheduleVersionRepository vaccineScheduleVersionRepository,
+                           VaccineScheduleItemRepository vaccineScheduleItemRepository,
+                           SampleContentSeeder sampleContentSeeder) {
         this.productRepository = productRepository;
         this.checklistTaskRepository = checklistTaskRepository;
         this.hospitalPartnerRepository = hospitalPartnerRepository;
         this.nursePackageRepository = nursePackageRepository;
         this.doctorSessionRepository = doctorSessionRepository;
+        this.featureFlagRepository = featureFlagRepository;
+        this.consentDocumentRepository = consentDocumentRepository;
+        this.careProtocolStepRepository = careProtocolStepRepository;
+        this.planRepository = planRepository;
+        this.planVersionRepository = planVersionRepository;
+        this.planEntitlementRepository = planEntitlementRepository;
+        this.payoutRateRepository = payoutRateRepository;
+        this.onboardingDocumentRepository = onboardingDocumentRepository;
+        this.vaccineScheduleVersionRepository = vaccineScheduleVersionRepository;
+        this.vaccineScheduleItemRepository = vaccineScheduleItemRepository;
+        this.sampleContentSeeder = sampleContentSeeder;
     }
 
     @Override
     public void run(String... args) {
+        // Versioned config: Flyway seeds these on real databases; these calls only matter for
+        // the test profile (no Flyway), and are no-ops once a table has rows.
+        seedFeatureFlags();
+        seedConsentDocuments();
+        seedCareProtocolSteps();
+        seedPlans();
+        seedPayoutRates();
+        seedOnboardingDocuments();
+        seedVaccineSchedule();
+
+        // Sample content, in every profile including prod (product-owner decision, 2026-10-30), so no
+        // listable endpoint comes back empty. SampleContentSeeder labels all of it as sample, adds providers
+        // and baby-care products, and tops up time-based lists (slots, events) on every boot.
         seedProducts();
         seedChecklists();
         seedHospitalPartners();
         seedNursePackages();
         seedDoctorSessions();
+        sampleContentSeeder.run();
+    }
+
+    /**
+     * Normally seeded by V4__feature_flags.sql, but the test profile skips Flyway entirely (H2
+     * create-drop instead), so this covers that path too — harmless no-op elsewhere since the
+     * count() > 0 guard skips it once Flyway has already seeded the real databases.
+     */
+    private void seedFeatureFlags() {
+        if (featureFlagRepository.count() > 0) return;
+
+        seedFlag("nurseCompanion", true, "Maa Sakhi nurse care plan & on-call triage");
+        seedFlag("hospitalLeads", true, "Local maternity hospital directory & tour bookings");
+        seedFlag("doctorLiveSessions", true, "OB-GYN interactive live streams & RSVP");
+        seedFlag("assessmentVoucher", true, "Instant discount voucher on diagnostic completion");
+        seedFlag("babyCareProducts", false, "Future expansion (0-5 years) - hidden by default");
+        seedFlag("productRecommendations", false, "Product store pages (Phase 6)");
+        seedFlag("careBooking", true, "Provider booking & sessions (Phase 3) - shipped 2026-10-29");
+        seedFlag("recordsVault", true, "Health records vault & sharing (Phase 4) - shipped 2026-10-29");
+        seedFlag("childTracker", false, "Child profile + vaccination tracker (Phase 6)");
+        seedFlag("aiAssistant", false, "AI record plan (Phase 6) - needs clinical governance first");
+        seedFlag("joyCircle", false, "Non-clinical group events (Phase 6)");
+        seedFlag("legacyLeadForms", false, "Old public lead/assessment forms");
+    }
+
+    private void seedFlag(String key, boolean enabled, String description) {
+        FeatureFlag flag = new FeatureFlag();
+        flag.setKey(key);
+        flag.setEnabled(enabled);
+        flag.setDescription(description);
+        featureFlagRepository.save(flag);
+    }
+
+    /**
+     * Normally seeded by V5__consent.sql, V21__records_storage_consent.sql and V24__health_profiles.sql, but the test profile skips
+     * Flyway entirely (see seedFeatureFlags() above for the same pattern) — this keeps H2 in sync with that seed data.
+     */
+    private void seedConsentDocuments() {
+        if (consentDocumentRepository.count() > 0) return;
+
+        seedConsentDocument(ConsentDocumentType.TERMS, 1, "Terms of Service",
+                "# Terms of Service (DRAFT)\n\nThis is placeholder text pending legal review. Do not treat this as a final or binding document.");
+        seedConsentDocument(ConsentDocumentType.PRIVACY, 1, "Privacy Notice",
+                "# Privacy Notice (DRAFT)\n\nThis is placeholder text pending legal review. Do not treat this as a final or binding document.");
+        seedConsentDocument(ConsentDocumentType.RECORDS_STORAGE, 1, "Health Records Storage",
+                "# Health Records Storage (DRAFT)\n\nI agree to NartureBelle storing the documents I upload. "
+                        + "This is placeholder text pending legal review. Do not treat this as a final or binding document.");
+        // HEALTH_DATA: v1 superseded by v2 (V26), which adds that her care professionals can see these details.
+        seedConsentDocument(ConsentDocumentType.HEALTH_DATA, 2, "Health Details",
+                "# Health Details (DRAFT)\n\nI agree to NartureBelle storing the health details I share (such as first pregnancy, "
+                        + "multiples and risk factors) and using them to tailor my recommendations. I also agree that the care "
+                        + "professionals I book sessions with can see these details during my sessions. "
+                        + "This is placeholder text pending legal review. Do not treat this as a final or binding document.");
+    }
+
+    /**
+     * Normally seeded by V7__care_protocol_steps.sql, but the test profile skips Flyway entirely
+     * (see seedFeatureFlags() above for the same pattern) — this keeps H2 in sync with that seed data.
+     */
+    private void seedCareProtocolSteps() {
+        if (careProtocolStepRepository.count() > 0) return;
+
+        seedCareStep(JourneyStatus.PREGNANCY, 1, Role.GYNECOLOGIST, "See your Gynecologist",
+                "Routine first-trimester prenatal check-up.", 10, false);
+        seedCareStep(JourneyStatus.PREGNANCY, 2, Role.GYNECOLOGIST, "See your Gynecologist",
+                "Routine second-trimester prenatal check-up.", 10, false);
+        seedCareStep(JourneyStatus.PREGNANCY, 2, Role.NUTRITIONIST, "Meet your Nutritionist",
+                "Second-trimester nutrition planning.", 20, false);
+        seedCareStep(JourneyStatus.PREGNANCY, 3, Role.GYNECOLOGIST, "See your Gynecologist",
+                "Routine third-trimester prenatal check-up.", 10, false);
+        seedCareStep(JourneyStatus.PREGNANCY, 3, Role.NUTRITIONIST, "Meet your Nutritionist",
+                "Third-trimester nutrition planning.", 20, false);
+        seedCareStep(JourneyStatus.PRE_DELIVERY, null, Role.GYNECOLOGIST, "See your Gynecologist",
+                "Pre-delivery check-up and birth planning.", 10, false);
+        seedCareStep(JourneyStatus.PRE_DELIVERY, null, Role.LACTATION_CONSULTANT, "Meet your Lactation consultant",
+                "Prepare for breastfeeding before delivery.", 20, false);
+        seedCareStep(JourneyStatus.DELIVERY_COMPLETED, null, Role.GYNECOLOGIST, "See your Gynecologist",
+                "Postnatal check-up.", 10, false);
+        seedCareStep(JourneyStatus.DELIVERY_COMPLETED, null, Role.PEDIATRICIAN, "Meet your Pediatrician",
+                "Newborn care check-up.", 20, false);
+        seedCareStep(JourneyStatus.DELIVERY_COMPLETED, null, Role.LACTATION_CONSULTANT, "Meet your Lactation consultant",
+                "Breastfeeding support after delivery.", 30, false);
+        seedCareStep(JourneyStatus.DELIVERY_COMPLETED, null, Role.POSTPARTUM_PHYSIOTHERAPIST, "Meet your Postpartum physiotherapist",
+                "Postpartum recovery support.", 40, false);
+        seedCareStep(JourneyStatus.POSTPARTUM, null, Role.GYNECOLOGIST, "See your Gynecologist",
+                "Postpartum follow-up check-up.", 10, false);
+        seedCareStep(JourneyStatus.POSTPARTUM, null, Role.PEDIATRICIAN, "Meet your Pediatrician",
+                "Ongoing newborn care check-ups.", 20, false);
+        seedCareStep(JourneyStatus.POSTPARTUM, null, Role.LACTATION_CONSULTANT, "Meet your Lactation consultant",
+                "Ongoing breastfeeding support.", 30, false);
+        seedCareStep(JourneyStatus.POSTPARTUM, null, Role.POSTPARTUM_PHYSIOTHERAPIST, "Meet your Postpartum physiotherapist",
+                "Ongoing postpartum recovery support.", 40, false);
+        seedCareStep(null, null, Role.CLINICAL_PSYCHOLOGIST, "Clinical psychologist support",
+                "Available if you'd like support - entirely optional, never required.", 100, true);
+    }
+
+    private void seedCareStep(JourneyStatus journeyStatus, Integer trimester, Role professionalType, String title,
+                               String description, int sortOrder, boolean optional) {
+        CareProtocolStep step = new CareProtocolStep();
+        step.setVersion(1);
+        step.setReviewStatus(ReviewStatus.PENDING_CLINICAL_REVIEW);
+        step.setJourneyStatus(journeyStatus);
+        step.setTrimester(trimester);
+        step.setProfessionalType(professionalType);
+        step.setTitle(title);
+        step.setDescription(description);
+        step.setSortOrder(sortOrder);
+        step.setOptional(optional);
+        careProtocolStepRepository.save(step);
+    }
+
+    private void seedConsentDocument(ConsentDocumentType type, int version, String title, String bodyMarkdown) {
+        ConsentDocument doc = new ConsentDocument();
+        doc.setType(type);
+        doc.setVersion(version);
+        doc.setTitle(title);
+        doc.setBodyMarkdown(bodyMarkdown);
+        doc.setEffectiveAt(LocalDateTime.now());
+        doc.setActive(true);
+        consentDocumentRepository.save(doc);
+    }
+
+    /**
+     * Normally seeded by V8__plans_orders_payments_entitlements.sql, but the test profile skips
+     * Flyway entirely (see seedFeatureFlags() above for the same pattern) — this keeps H2 in sync.
+     * Per-professional allocation/validity/copy are placeholders pending the real blueprint §5 numbers.
+     */
+    private void seedPlans() {
+        if (planRepository.count() > 0) return;
+
+        Long standardId = seedPlan(PlanCode.STANDARD, "Standard", 10);
+        Long careId = seedPlan(PlanCode.CARE, "Care", 20);
+        Long premiumId = seedPlan(PlanCode.PREMIUM, "Premium", 30);
+
+        Long standardVersionId = seedPlanVersion(standardId, new BigDecimal("9999.00"), new BigDecimal("11998.80"), 9,
+                List.of("9 total sessions across your assigned care team",
+                        "Gynecologist and nutritionist session allocation",
+                        "Session wallet with per-professional tracking"),
+                List.of("Hospital delivery charges", "Sessions beyond the allocated count"));
+        seedAllocation(standardVersionId, Role.GYNECOLOGIST, 5);
+        seedAllocation(standardVersionId, Role.NUTRITIONIST, 4);
+
+        Long careVersionId = seedPlanVersion(careId, new BigDecimal("14999.00"), new BigDecimal("17998.80"), 12,
+                List.of("12 total sessions across your assigned care team",
+                        "Gynecologist, nutritionist and lactation consultant session allocation",
+                        "Session wallet with per-professional tracking"),
+                List.of("Hospital delivery charges", "Sessions beyond the allocated count"));
+        seedAllocation(careVersionId, Role.GYNECOLOGIST, 5);
+        seedAllocation(careVersionId, Role.NUTRITIONIST, 4);
+        seedAllocation(careVersionId, Role.LACTATION_CONSULTANT, 3);
+
+        Long premiumVersionId = seedPlanVersion(premiumId, new BigDecimal("24999.00"), new BigDecimal("29998.80"), 16,
+                List.of("16 total sessions across your assigned care team",
+                        "Gynecologist, nutritionist, lactation consultant and postpartum physiotherapist session allocation",
+                        "Session wallet with per-professional tracking"),
+                List.of("Hospital delivery charges", "Sessions beyond the allocated count"));
+        seedAllocation(premiumVersionId, Role.GYNECOLOGIST, 6);
+        seedAllocation(premiumVersionId, Role.NUTRITIONIST, 4);
+        seedAllocation(premiumVersionId, Role.LACTATION_CONSULTANT, 3);
+        seedAllocation(premiumVersionId, Role.POSTPARTUM_PHYSIOTHERAPIST, 3);
+    }
+
+    private Long seedPlan(PlanCode code, String name, int displayOrder) {
+        Plan plan = new Plan();
+        plan.setCode(code);
+        plan.setName(name);
+        plan.setDisplayOrder(displayOrder);
+        return planRepository.save(plan).getId();
+    }
+
+    private Long seedPlanVersion(Long planId, BigDecimal oneTimePrice, BigDecimal installmentTotalPrice,
+                                  int totalSessions, List<String> inclusions, List<String> exclusions) {
+        PlanVersion planVersion = new PlanVersion();
+        planVersion.setPlanId(planId);
+        planVersion.setVersion(1);
+        planVersion.setActive(true);
+        planVersion.setOneTimePrice(oneTimePrice);
+        planVersion.setInstallmentTotalPrice(installmentTotalPrice);
+        planVersion.setInstallmentCount(2);
+        planVersion.setTotalSessions(totalSessions);
+        planVersion.setValidityDays(365);
+        planVersion.setEffectiveAt(LocalDateTime.now());
+        planVersion.setInclusions(inclusions);
+        planVersion.setExclusions(exclusions);
+        return planVersionRepository.save(planVersion).getId();
+    }
+
+    private void seedAllocation(Long planVersionId, Role professionalType, int sessionCount) {
+        PlanEntitlement allocation = new PlanEntitlement();
+        allocation.setPlanVersionId(planVersionId);
+        allocation.setProfessionalType(professionalType);
+        allocation.setSessionCount(sessionCount);
+        planEntitlementRepository.save(allocation);
+    }
+
+    /**
+     * Normally seeded by V9__providers_booking_sessions.sql, but the test profile skips Flyway
+     * entirely (see seedFeatureFlags() above for the same pattern) — this keeps H2 in sync.
+     * Amounts are placeholder figures pending a real payout rate decision.
+     */
+    private void seedPayoutRates() {
+        if (payoutRateRepository.count() > 0) return;
+
+        for (Role professionalType : List.of(Role.GYNECOLOGIST, Role.NUTRITIONIST, Role.LACTATION_CONSULTANT,
+                Role.PEDIATRICIAN, Role.POSTPARTUM_PHYSIOTHERAPIST, Role.CLINICAL_PSYCHOLOGIST, Role.REGISTERED_NURSE)) {
+            PayoutRate rate = new PayoutRate();
+            rate.setProfessionalType(professionalType);
+            rate.setAmount(new BigDecimal("500.00"));
+            payoutRateRepository.save(rate);
+        }
+    }
+
+
+    /**
+     * Normally seeded by V15__onboarding_documents.sql, but the test profile skips Flyway entirely
+     * (see seedFeatureFlags() above for the same pattern) — this keeps H2 in sync with that seed data.
+     */
+    private void seedOnboardingDocuments() {
+        if (onboardingDocumentRepository.count() > 0) return;
+
+        OnboardingDocument document = new OnboardingDocument();
+        document.setType(OnboardingDocumentType.ONBOARDING_AGREEMENT);
+        document.setVersion(1);
+        document.setTitle("Onboarding Care Agreement");
+        document.setBodyMarkdown("# Onboarding Care Agreement (DRAFT)\n\n"
+                + "This is placeholder text pending legal review. Do not treat this as a final or binding document.");
+        document.setEffectiveAt(LocalDateTime.now());
+        document.setActive(true);
+        onboardingDocumentRepository.save(document);
+    }
+
+    /**
+     * Normally seeded by V16__child_and_vaccinations.sql; same test-profile fallback as
+     * seedOnboardingDocuments() above. Keep the two lists identical.
+     */
+    private void seedVaccineSchedule() {
+        if (vaccineScheduleVersionRepository.count() > 0) return;
+
+        VaccineScheduleVersion version = new VaccineScheduleVersion();
+        version.setVersion(1);
+        version.setTitle("Reference childhood schedule (draft)");
+        version.setReviewStatus(ReviewStatus.PENDING_CLINICAL_REVIEW);
+        version.setEffectiveAt(LocalDateTime.now());
+        version.setActive(true);
+        Long versionId = vaccineScheduleVersionRepository.save(version).getId();
+
+        Object[][] doses = {
+                {"BCG", 0, "Birth"},
+                {"Hepatitis B (Birth Dose)", 0, "Birth"},
+                {"OPV (Birth Dose)", 0, "Birth"},
+                {"Pentavalent 1 (DTwP-HepB-Hib)", 42, "6 weeks"},
+                {"Rotavirus 1", 42, "6 weeks"},
+                {"PCV 1", 42, "6 weeks"},
+                {"Pentavalent 2", 70, "10 weeks"},
+                {"Rotavirus 2", 70, "10 weeks"},
+                {"PCV 2", 70, "10 weeks"},
+                {"Pentavalent 3", 98, "14 weeks"},
+                {"Rotavirus 3", 98, "14 weeks"},
+                {"PCV Booster", 274, "9 months"},
+                {"MMR 1", 274, "9 months"},
+                {"MMR 2", 457, "15 months"},
+                {"DTwP Booster 1", 487, "16 months"},
+                {"OPV Booster", 487, "16 months"},
+        };
+        for (int i = 0; i < doses.length; i++) {
+            VaccineScheduleItem item = new VaccineScheduleItem();
+            item.setScheduleVersionId(versionId);
+            item.setVaccineName((String) doses[i][0]);
+            item.setDueAgeDays((Integer) doses[i][1]);
+            item.setDueAgeLabel((String) doses[i][2]);
+            item.setSortOrder(i + 1);
+            vaccineScheduleItemRepository.save(item);
+        }
     }
 
     private void seedProducts() {

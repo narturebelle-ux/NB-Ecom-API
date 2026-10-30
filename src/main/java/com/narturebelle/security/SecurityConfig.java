@@ -2,6 +2,7 @@ package com.narturebelle.security;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -48,14 +49,26 @@ public class SecurityConfig {
                                 "/api/v1/doctor-sessions/**",
                                 "/api/v1/nurse-companion/**",
                                 "/api/v1/leads/**",
+                                "/api/v1/consent-documents/**",
+                                "/api/v1/plans/**",
+                                "/api/v1/payments/webhook",
+                                "/api/v1/providers/**",
                                 "/swagger-ui.html",
                                 "/swagger-ui/**",
                                 "/v3/api-docs/**"
                         ).permitAll()
+                        // Joy Circle browsing is public; RSVP (POST/DELETE on the same path) falls through to authenticated().
+                        .requestMatchers(HttpMethod.GET, "/api/v1/joy-circle/events", "/api/v1/joy-circle/events/*").permitAll()
+                        // Careers page + applying, and the ideas/feedback form (token optional there).
+                        .requestMatchers(HttpMethod.GET, "/api/v1/careers/jobs", "/api/v1/careers/jobs/*").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/careers/jobs/*/applications", "/api/v1/feedback").permitAll()
                         // Dev-only legacy endpoints (bean only exists outside prod/stage; still explicit here).
                         .requestMatchers("/api/v1/auth/send-otp", "/api/v1/auth/login").permitAll()
-                        // Admin namespace — reserved, no concrete endpoints yet.
-                        .requestMatchers("/api/v1/admin/**").hasAuthority("ROLE_ADMIN")
+                        // Admin namespace (feature flags, refunds, finance view, ...). Any *_ADMIN role qualifies.
+                        .requestMatchers("/api/v1/admin/**").hasAnyAuthority(
+                                "ROLE_CLINIC_ADMIN", "ROLE_HOSPITAL_ADMIN", "ROLE_OPERATIONS_ADMIN",
+                                "ROLE_FINANCE_ADMIN", "ROLE_SECURITY_ADMIN", "ROLE_SUPER_ADMIN"
+                        )
                         // Everything else (auth/firebase, users/me, users/{id}, future endpoints) needs a valid token.
                         .anyRequest().authenticated()
                 )

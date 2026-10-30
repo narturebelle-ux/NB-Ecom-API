@@ -8,15 +8,8 @@
 spring:
   jpa:
     hibernate:
-      ddl-auto: validate # Never auto-create/update schema in production
+      ddl-auto: validate # Never auto-create/update schema in production — Flyway owns it
     show-sql: false
-
-features:
-  nurse-companion: ${FEATURE_NURSE_COMPANION:true}
-  hospital-leads: ${FEATURE_HOSPITAL_LEADS:true}
-  doctor-live-sessions: ${FEATURE_DOCTOR_LIVE:true}
-  assessment-voucher: ${FEATURE_ASSESSMENT_VOUCHER:true}
-  baby-care-products: ${FEATURE_BABY_CARE:false}
 
 logging:
   level:

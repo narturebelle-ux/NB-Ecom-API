@@ -3,6 +3,8 @@ package com.narturebelle.model;
 import jakarta.persistence.*;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.HashSet;
+import java.util.Set;
 
 @Entity
 @Table(name = "users")
@@ -38,16 +40,21 @@ public class User {
 
     private LocalDate dueDate;
 
-    private String role; // "USER", "VIP_MEMBER", "ADMIN"
+    /** @deprecated kept readable for one release post-migration; nothing writes to it any more — use {@link #roles}. */
+    @Deprecated
+    private String role;
+
+    @ElementCollection(targetClass = Role.class, fetch = FetchType.EAGER)
+    @Enumerated(EnumType.STRING)
+    @CollectionTable(name = "user_roles", joinColumns = @JoinColumn(name = "user_id"))
+    @Column(name = "role")
+    private Set<Role> roles = new HashSet<>();
 
     private LocalDateTime createdAt;
 
     @PrePersist
     protected void onCreate() {
         this.createdAt = LocalDateTime.now();
-        if (this.role == null) {
-            this.role = "USER";
-        }
         syncName();
     }
 
@@ -112,8 +119,13 @@ public class User {
     public LocalDate getDueDate() { return dueDate; }
     public void setDueDate(LocalDate dueDate) { this.dueDate = dueDate; }
 
+    @Deprecated
     public String getRole() { return role; }
+    @Deprecated
     public void setRole(String role) { this.role = role; }
+
+    public Set<Role> getRoles() { return roles; }
+    public void setRoles(Set<Role> roles) { this.roles = roles; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
