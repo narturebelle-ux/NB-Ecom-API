@@ -282,6 +282,18 @@ public class GlobalExceptionHandler {
                 .body(Map.of("code", "DELETION_REQUEST_NOT_FOUND", "message", e.getMessage()));
     }
 
+    @ExceptionHandler(ChecklistTaskNotFoundException.class)
+    public ResponseEntity<Map<String, String>> handleChecklistTaskNotFound(ChecklistTaskNotFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(Map.of("code", "CHECKLIST_TASK_NOT_FOUND", "message", e.getMessage()));
+    }
+
+    @ExceptionHandler(CatalogItemInUseException.class)
+    public ResponseEntity<Map<String, String>> handleCatalogItemInUse(CatalogItemInUseException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(Map.of("code", "CATALOG_ITEM_IN_USE", "message", e.getMessage()));
+    }
+
     @ExceptionHandler(InvalidChildRequestException.class)
     public ResponseEntity<Map<String, Object>> handleInvalidChildRequest(InvalidChildRequestException e) {
         Map<String, Object> body = new HashMap<>();

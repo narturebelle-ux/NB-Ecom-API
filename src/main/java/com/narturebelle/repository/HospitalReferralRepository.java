@@ -12,4 +12,5 @@ public interface HospitalReferralRepository extends JpaRepository<HospitalReferr
     List<HospitalReferral> findAllByOrderByCreatedAtDesc();
     Optional<HospitalReferral> findFirstByUserIdAndHospitalIdAndStatus(Long userId, Long hospitalId, ReferralStatus status);
     boolean existsByCode(String code);
+    boolean existsByHospitalId(Long hospitalId);
 }

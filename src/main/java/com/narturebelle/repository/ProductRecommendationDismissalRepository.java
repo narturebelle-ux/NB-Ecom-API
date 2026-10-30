@@ -9,4 +9,5 @@ import java.util.Optional;
 public interface ProductRecommendationDismissalRepository extends JpaRepository<ProductRecommendationDismissal, Long> {
     List<ProductRecommendationDismissal> findByUserId(Long userId);
     Optional<ProductRecommendationDismissal> findByUserIdAndProductId(Long userId, Long productId);
+    boolean existsByProductId(Long productId);
 }
