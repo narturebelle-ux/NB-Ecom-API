@@ -2,12 +2,15 @@ package com.narturebelle.controller;
 
 import com.narturebelle.model.Booking;
 import com.narturebelle.model.BookingStatus;
+import com.narturebelle.model.Consent;
+import com.narturebelle.model.ConsentDocumentType;
 import com.narturebelle.model.Provider;
 import com.narturebelle.model.ProviderStatus;
 import com.narturebelle.model.RecordAccessEvent;
 import com.narturebelle.model.Role;
 import com.narturebelle.model.User;
 import com.narturebelle.repository.BookingRepository;
+import com.narturebelle.repository.ConsentRepository;
 import com.narturebelle.repository.HealthRecordRepository;
 import com.narturebelle.repository.ProviderRepository;
 import com.narturebelle.repository.RecordAccessEventRepository;
@@ -60,6 +63,7 @@ class RecordsTest {
     @Autowired private HealthRecordRepository healthRecordRepository;
     @Autowired private RecordShareRepository recordShareRepository;
     @Autowired private RecordAccessEventRepository recordAccessEventRepository;
+    @Autowired private ConsentRepository consentRepository;
 
     @MockBean private FirebaseTokenVerifier firebaseTokenVerifier;
     @MockBean private StorageProvider storageProvider;
@@ -75,6 +79,7 @@ class RecordsTest {
         healthRecordRepository.deleteAll();
         bookingRepository.deleteAll();
         providerRepository.deleteAll();
+        consentRepository.deleteAll();
         userRepository.deleteAll();
 
         ownerUserId = createUser("uid-records-owner", "records-owner@example.com", Role.MOTHER);
@@ -104,13 +109,45 @@ class RecordsTest {
         when(storageProvider.objectExists(anyString(), anyString())).thenReturn(true);
     }
 
+    /** Every test user has granted RECORDS_STORAGE (needed to upload); see uploadWithoutRecordsStorageConsent_returns403. */
     private Long createUser(String uid, String email, Role role) {
         User user = new User();
         user.setFirebaseUid(uid);
         user.setEmail(email);
         user.setEmailVerified(true);
         user.setRoles(Set.of(role));
-        return userRepository.save(user).getId();
+        Long id = userRepository.save(user).getId();
+        Consent consent = new Consent();
+        consent.setUserId(id);
+        consent.setDocumentType(ConsentDocumentType.RECORDS_STORAGE);
+        consent.setDocumentVersion(1);
+        consentRepository.save(consent);
+        return id;
+    }
+
+    @Test
+    void uploadWithoutRecordsStorageConsent_returns403() throws Exception {
+        consentRepository.deleteAll();
+
+        mockMvc.perform(post("/api/v1/records/upload-url")
+                        .header("Authorization", "Bearer " + TOKEN_OWNER)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"category\":\"LAB_REPORT\",\"fileName\":\"report.pdf\",\"mimeType\":\"application/pdf\",\"sizeBytes\":1024}"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("CONSENT_REQUIRED"))
+                .andExpect(jsonPath("$.pending[0]").value("RECORDS_STORAGE"));
+    }
+
+    @Test
+    void recordsStorageConsent_isNotRequiredForTheRestOfTheApp() throws Exception {
+        mockMvc.perform(get("/api/v1/consent-documents/current"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.type == 'RECORDS_STORAGE')].required").value(false))
+                .andExpect(jsonPath("$[?(@.type == 'TERMS')].required").value(true));
+        // The owner has only RECORDS_STORAGE, not TERMS/PRIVACY: pending lists just the required two.
+        mockMvc.perform(get("/api/v1/me/consents").header("Authorization", "Bearer " + TOKEN_OWNER))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.pending", org.hamcrest.Matchers.containsInAnyOrder("PRIVACY", "TERMS")));
     }
 
     private Long uploadAndRegister(String token) throws Exception {

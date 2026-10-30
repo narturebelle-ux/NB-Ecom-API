@@ -35,6 +35,9 @@ public class ConsentDocument {
     public void setId(Long id) { this.id = id; }
 
     public ConsentDocumentType getType() { return type; }
+
+    /** Derived from the type, not stored -- serialised as "required" so clients know which belong on the sign-up step. */
+    public boolean isRequired() { return type != null && type.isRequired(); }
     public void setType(ConsentDocumentType type) { this.type = type; }
 
     public Integer getVersion() { return version; }

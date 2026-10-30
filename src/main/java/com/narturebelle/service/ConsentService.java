@@ -1,12 +1,15 @@
 package com.narturebelle.service;
 
+import com.narturebelle.exception.ConsentRequiredException;
 import com.narturebelle.model.Consent;
 import com.narturebelle.model.ConsentDocument;
+import com.narturebelle.model.ConsentDocumentType;
 import com.narturebelle.repository.ConsentDocumentRepository;
 import com.narturebelle.repository.ConsentRepository;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.Optional;
 
 @Component
 public class ConsentService {
@@ -20,12 +23,14 @@ public class ConsentService {
     }
 
     /**
-     * Required document types (TERMS, PRIVACY) with no active grant for the CURRENT active version.
+     * Required document types (TERMS, PRIVACY -- see ConsentDocumentType.isRequired) with no active grant for the CURRENT active version.
      * userId == null (token valid, no user row yet) means nothing could possibly have been granted,
      * so every active document type is pending — no DB lookup needed for that case.
      */
     public List<String> pendingConsentTypes(Long userId) {
-        List<ConsentDocument> activeDocuments = consentDocumentRepository.findByActiveTrue();
+        List<ConsentDocument> activeDocuments = consentDocumentRepository.findByActiveTrue().stream()
+                .filter(doc -> doc.getType().isRequired())
+                .toList();
 
         if (userId == null) {
             return activeDocuments.stream().map(d -> d.getType().name()).sorted().toList();
@@ -37,6 +42,23 @@ public class ConsentService {
                 .map(d -> d.getType().name())
                 .sorted()
                 .toList();
+    }
+
+    /**
+     * Feature-level gate for a non-required consent type: 403 CONSENT_REQUIRED (pending = [type]) unless
+     * the user has an active grant for the CURRENT version. No active document of that type means there's
+     * nothing to consent to yet, so nothing is blocked.
+     */
+    public void requireGranted(Long userId, ConsentDocumentType type) {
+        Optional<ConsentDocument> active = consentDocumentRepository.findByTypeAndActiveTrue(type);
+        if (active.isEmpty()) {
+            return;
+        }
+        boolean granted = userId != null && consentRepository.existsByUserIdAndDocumentTypeAndDocumentVersionAndRevokedAtIsNull(
+                userId, type, active.get().getVersion());
+        if (!granted) {
+            throw new ConsentRequiredException(List.of(type.name()));
+        }
     }
 
     public List<Consent> history(Long userId) {

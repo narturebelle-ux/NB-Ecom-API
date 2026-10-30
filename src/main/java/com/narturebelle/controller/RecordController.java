@@ -10,11 +10,13 @@ import com.narturebelle.dto.RecordShareResponse;
 import com.narturebelle.dto.RecordUploadUrlResponse;
 import com.narturebelle.dto.RegisterRecordRequest;
 import com.narturebelle.exception.UserProfileNotFoundException;
+import com.narturebelle.model.ConsentDocumentType;
 import com.narturebelle.model.HealthRecord;
 import com.narturebelle.model.RecordShare;
 import com.narturebelle.security.AuthorizationService;
 import com.narturebelle.security.FirebaseUserPrincipal;
 import com.narturebelle.security.RequireVerified;
+import com.narturebelle.service.ConsentService;
 import com.narturebelle.service.ProviderService;
 import com.narturebelle.service.RecordService;
 import jakarta.validation.Valid;
@@ -31,18 +33,22 @@ public class RecordController {
     private final RecordService recordService;
     private final ProviderService providerService;
     private final AuthorizationService authorizationService;
+    private final ConsentService consentService;
 
     public RecordController(RecordService recordService, ProviderService providerService,
-                             AuthorizationService authorizationService) {
+                             AuthorizationService authorizationService, ConsentService consentService) {
         this.recordService = recordService;
         this.providerService = providerService;
         this.authorizationService = authorizationService;
+        this.consentService = consentService;
     }
 
+    /** Both upload steps need the RECORDS_STORAGE consent (403 CONSENT_REQUIRED, pending ["RECORDS_STORAGE"]). */
     @RequireVerified
     @PostMapping("/upload-url")
     public ResponseEntity<RecordUploadUrlResponse> uploadUrl(@Valid @RequestBody CreateRecordUploadUrlRequest req) {
         Long userId = requireUserId(authorizationService.currentPrincipal());
+        consentService.requireGranted(userId, ConsentDocumentType.RECORDS_STORAGE);
         var intent = recordService.issueUploadUrl(userId, req);
         return ResponseEntity.ok(RecordUploadUrlResponse.of(intent.objectPath(), intent.uploadUrl(), intent.token(), intent.expiresAt()));
     }
@@ -51,6 +57,7 @@ public class RecordController {
     @PostMapping
     public ResponseEntity<HealthRecordResponse> register(@Valid @RequestBody RegisterRecordRequest req) {
         Long userId = requireUserId(authorizationService.currentPrincipal());
+        consentService.requireGranted(userId, ConsentDocumentType.RECORDS_STORAGE);
         HealthRecord record = recordService.registerUpload(userId, req);
         return ResponseEntity.ok(HealthRecordResponse.from(record));
     }
