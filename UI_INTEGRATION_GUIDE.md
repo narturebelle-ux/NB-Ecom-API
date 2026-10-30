@@ -673,7 +673,7 @@ The AI record plan (needs clinical governance), regional languages and capacity 
 - `POST /api/v1/feedback` JSON `{name?, email?, message* (≤3000), rating? (1–5), page? (≤300), website (honeypot)}` → `201 {id}`. The token is optional; when sent, the user id is stored. `429` after 10/hour per IP.
 - A filled honeypot gets the normal `201` (with `id: 0`) and nothing is saved or emailed.
 
-Every application (résumé attached, reply-to = the applicant) and every feedback message is emailed to `admin@narturebelle.com`, and the applicant gets a "we received your application" email. Until the email provider is configured, nothing is delivered — submissions are still saved and visible in the admin screens (`adminNotified: false`).
+Every application (résumé attached, reply-to = the applicant) and every feedback message is emailed to `hello@narturebelle.com`, and the applicant gets a "we received your application" email. Until the email provider is configured, nothing is delivered — submissions are still saved and visible in the admin screens (`adminNotified: false`).
 
 **Admin (any `*_ADMIN` role):**
 - `GET /api/v1/admin/careers/jobs` → all roles incl. closed, each with `applicationCount`.

@@ -92,7 +92,8 @@ email:
     api-key: ${RESEND_API_KEY:}
 
 careers:
-  admin-email: ${CAREERS_ADMIN_EMAIL:admin@narturebelle.com}
+  # Careers applications and ideas/feedback go to the hello@ mailbox (product-owner decision, 2026-10-30).
+  admin-email: ${CAREERS_ADMIN_EMAIL:hello@narturebelle.com}
 
 narturebelle:
   scheduling:
