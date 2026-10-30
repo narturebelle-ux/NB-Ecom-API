@@ -140,7 +140,7 @@ class CareersTest {
         ArgumentCaptor<EmailMessage> sent = ArgumentCaptor.forClass(EmailMessage.class);
         verify(emailSender, times(2)).send(sent.capture());
         EmailMessage toAdmin = sent.getAllValues().get(0);
-        assertEquals("admin@narturebelle.com", toAdmin.to());
+        assertEquals("hello@narturebelle.com", toAdmin.to());
         assertEquals("asha@example.com", toAdmin.replyTo());
         assertTrue(toAdmin.text().contains("+91 98450 12345"));
         assertEquals("Asha CV.pdf", toAdmin.attachments().get(0).fileName());
@@ -266,7 +266,7 @@ class CareersTest {
 
         ArgumentCaptor<EmailMessage> sent = ArgumentCaptor.forClass(EmailMessage.class);
         verify(emailSender, times(2)).send(sent.capture());
-        assertEquals("admin@narturebelle.com", sent.getAllValues().get(0).to());
+        assertEquals("hello@narturebelle.com", sent.getAllValues().get(0).to());
         assertEquals("meera@example.com", sent.getAllValues().get(0).replyTo());
         assertTrue(sent.getAllValues().get(0).text().contains("Add Tamil videos"));
     }

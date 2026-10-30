@@ -673,7 +673,7 @@ The AI record plan (needs clinical governance), regional languages and capacity 
 - `POST /api/v1/feedback` JSON `{name?, email?, message* (≤3000), rating? (1–5), page? (≤300), website (honeypot)}` → `201 {id}`. The token is optional; when sent, the user id is stored. `429` after 10/hour per IP.
 - A filled honeypot gets the normal `201` (with `id: 0`) and nothing is saved or emailed.
 
-Every application (résumé attached, reply-to = the applicant) and every feedback message is emailed to `admin@narturebelle.com`, and the applicant gets a "we received your application" email. Until the email provider is configured, nothing is delivered — submissions are still saved and visible in the admin screens (`adminNotified: false`).
+Every application (résumé attached, reply-to = the applicant) and every feedback message is emailed to `hello@narturebelle.com`, and the applicant gets a "we received your application" email. Until the email provider is configured, nothing is delivered — submissions are still saved and visible in the admin screens (`adminNotified: false`).
 
 **Admin (any `*_ADMIN` role):**
 - `GET /api/v1/admin/careers/jobs` → all roles incl. closed, each with `applicationCount`.
@@ -681,6 +681,55 @@ Every application (résumé attached, reply-to = the applicant) and every feedba
 - `PUT /api/v1/admin/careers/jobs/{id}` (full replace, status unchanged), `POST …/{id}/close`, `POST …/{id}/reopen`.
 - `GET /api/v1/admin/careers/jobs/{id}/applications` → `[{id, jobId, fullName, email, phone, location, linkedinUrl, portfolioUrl, yearsExperience, coverNote, resumeFileName, resumeSizeBytes, submittedAt, adminNotified}]`.
 - `GET /api/v1/admin/careers/applications/{id}/resume` → the file itself (`Content-Disposition: attachment`; fetch with the admin token, save the blob). Every download is audited.
+
+## 15. Idea pool & Idea Impact
+
+Members post ideas into a public pool, in one of five categories, and vote on each other's. **Only votes from
+members with a paid order count toward the goal** (`voteGoal`, 1,000 by default; env `IDEAS_VOTE_GOAL`). That's what
+makes sharing an idea worthwhile: friends sign up, buy a plan and vote. Implemented ideas are celebrated on **Idea Impact**.
+The pool runs for a limited time. The `ideaPool` feature flag (`PATCH /admin/feature-flags/ideaPool`) closes
+submissions and voting while browsing stays up. This is meant as a creative, campaign-style page, not a form.
+
+**Public (a token is optional and adds `votedByMe`/`mine`):**
+- `GET /api/v1/ideas/meta` → `{open, voteGoal, categories:[{code, label, description}]}`. The categories are
+  `CARE_AND_SESSIONS`, `NUTRITION_AND_WELLNESS`, `BABY_AND_POSTPARTUM`, `COMMUNITY`, `APP_EXPERIENCE`.
+- `GET /api/v1/ideas?category=&sort=top|new` → the pool (OPEN, UNDER_REVIEW and IMPLEMENTED). `top` sorts by paid votes, then all votes.
+- `GET /api/v1/ideas/{id}` → one idea. **This is the share-link target.** Declined ideas are 404.
+- `GET /api/v1/ideas/impact` → implemented ideas, newest first. `authorName` is the member's name only if she ticked
+  `featureConsent`; otherwise it's "A NartureBelle mom".
+
+Idea: `{id, number ("IDEA-0042"), category, categoryLabel, title, description, authorName ("Asha R."), status:
+OPEN|UNDER_REVIEW|IMPLEMENTED|DECLINED, votes, paidVotes, voteGoal, goalReached, impactNote, implementedAt, createdAt,
+votedByMe?, mine?, featureConsent? (only on your own)}`.
+
+**Members (signed in, TERMS + PRIVACY consent). Name and email are never asked; they come from the account:**
+- `POST /api/v1/me/ideas` `{category*, title* (≤120), description* (≤1500), featureConsent}` → `201` Idea. Up to 5 a day (`429 TOO_MANY_REQUESTS`).
+  The public pool shows her first name + last initial, so say so on the form.
+- `GET /api/v1/me/ideas` → her ideas with status, votes and `impactNote`.
+- `POST /api/v1/ideas/{id}/vote` / `DELETE …/vote` → the updated Idea. Voting twice is harmless.
+  `409 IDEA_SELF_VOTE` on her own idea, `409 IDEA_NOT_OPEN` once it's no longer OPEN, `409 IDEA_POOL_CLOSED` when the pool is closed, `401` without a token.
+
+**Admin (*_ADMIN):** `GET /api/v1/admin/ideas?status=` and `POST /api/v1/admin/ideas/{id}/status {status, impactNote}`.
+`impactNote` ("what changed", shown publicly) is required for IMPLEMENTED (`400 IMPACT_NOTE_REQUIRED`). The admin inbox is
+emailed when an idea is posted and when one first reaches the goal.
+## 16. Referral links & the free Premium reward
+
+Every member has a personal code. When **5 friends join through her link and buy a plan**, she gets a **free Premium plan**:
+the full 9 months, with every session it includes. It's granted automatically, once per member. Only the member who
+shared is rewarded; friends pay normally.
+
+- **Share link:** the UI builds it from the code, e.g. `https://www.narturebelle.com/?ref=AB3K7Q9M`. Keep `ref` (in
+  localStorage) through sign-up.
+- `GET /api/v1/referrals/{code}` (public) → `{referrerName: "Asha R."}` for an "Asha R. invited you" banner. A bad link is `404 REFERRAL_CODE_NOT_FOUND`.
+- `POST /api/v1/me/referral/claim {code}` → `{referrerName}`. Call it right after sign-in when a stored `ref` exists, then clear it.
+  The code is case-insensitive. `409 REFERRAL_SELF` (her own code), `409 REFERRAL_ALREADY_CLAIMED`, `409 REFERRAL_NOT_NEW_CUSTOMER`
+  (she has already bought a plan; only new customers count). Clear the stored `ref` on any 4xx too.
+- `GET /api/v1/me/referral` → `{code, target: 5, invited, qualified, rewardGranted, rewardOrderId, friends: [{name, joinedAt, purchased}]}`.
+  Show "qualified / 5". After the reward, the Premium plan appears in her orders and entitlements like any purchase,
+  at price 0, and she gets an email.
+
+A friend qualifies when her first real (price > 0) order becomes PAID. This is processed after the payment commits, so a
+referral problem can never affect a payment. Signed-in endpoints need TERMS + PRIVACY consent.
 
 ## Quick product/content endpoints (no auth needed, safe to build against today)
 `GET /api/v1/products`, `/api/v1/checklists`, `/api/v1/hospitals`, `/api/v1/doctor-sessions`, `/api/v1/nurse-companion/packages`, `/api/v1/features`, `/api/v1/consent-documents/current`, `/api/v1/plans`, `/api/v1/plans/{id}`, `/api/v1/providers`, `/api/v1/providers/{id}`, `/api/v1/providers/{id}/slots` — all public, all working, full details in Swagger.

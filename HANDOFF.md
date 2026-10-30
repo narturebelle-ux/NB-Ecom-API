@@ -9,6 +9,7 @@ This document separates **"already in the repo before this session touched anyth
 ## 0. Repo identity
 - Spring Boot 3.3.4, Java 21, Gradle. Domain: maternity-care platform backend ("NartureBelle") — products, pregnancy checklists, doctor live sessions, nurse-companion bookings, hospital partner directory, lead capture.
 - Branches on `origin`: `main` (GitHub default, now up to date), `master`, `codestepup`, `Added_Split_IO`.
+- **Branching workflow (from 2026-10-30):** every new feature gets its own `feature/<name>` branch, created from the latest `origin/develop`, merged into `develop` by pull request; `develop` → `main` by pull request releases to production. Full rules in `README.md`.
 - Git identity used for commits in this session: `narturebelle-ux` / `narturebelle@gmail.com`.
 
 ## 1. True baseline — last real commits before this session
@@ -273,10 +274,18 @@ Full request/response JSON (including the new error codes `ONBOARDING_DOCUMENT_N
 
 ## 13. Careers & ideas/feedback
 
-Product-owner requirement (relayed by the UI session): admins post/close roles, people apply with a résumé, and every application and every ideas/feedback message is emailed to admin@narturebelle.com "through our API". Contract in `UI_INTEGRATION_GUIDE.md` §14; migration V28; covered by `CareersTest`.
+Product-owner requirement (relayed by the UI session): admins post/close roles, people apply with a résumé, and every application and every ideas/feedback message is emailed to hello@narturebelle.com "through our API". Contract in `UI_INTEGRATION_GUIDE.md` §14; migration V28; covered by `CareersTest`.
 
 - **Résumés live in Postgres** (`job_application_resumes`, bytea, ≤4 MB, under Vercel's 4.5 MB request limit), not Supabase Storage: prod still has placeholder Supabase credentials, so storage uploads would fail there. Admins download through the API (audited); there is no signed URL.
-- **Email goes through `com.narturebelle.email.EmailSender`**: `ResendEmailSender` when `RESEND_API_KEY` is set, otherwise `LoggingEmailSender` (logs the subject, delivers nothing). A failed send never fails a submission; `adminNotifiedAt` records whether the admin email really went out. Config: `RESEND_API_KEY`, `EMAIL_FROM` (default `NartureBelle <no-reply@narturebelle.com>`), `CAREERS_ADMIN_EMAIL` (default `admin@narturebelle.com`).
+- **Email goes through `com.narturebelle.email.EmailSender`**: `ResendEmailSender` when `RESEND_API_KEY` is set, otherwise `LoggingEmailSender` (logs the subject, delivers nothing). A failed send never fails a submission; `adminNotifiedAt` records whether the admin email really went out. Config: `RESEND_API_KEY`, `EMAIL_FROM` (default `NartureBelle <no-reply@narturebelle.com>`), `CAREERS_ADMIN_EMAIL` (default `hello@narturebelle.com`; support and care use support-care@narturebelle.com, which the API does not send to).
 - **Spam control**: a honeypot field, magic-byte checks on the résumé, and an in-memory per-instance rate limiter (`RateLimiter`). `server.forward-headers-strategy: native` makes the client IP come from Cloud Run's `X-Forwarded-For`.
 
 **Open product-owner decision — retention:** applications and résumés are personal data, and nothing deletes them today. Decide how long to keep them (e.g. 12 months after the role closes) and whether rejected applicants' data goes sooner; then add a scheduled purge.
+
+## 14. Idea pool & Idea Impact
+
+Product-owner design (2026-10-30): signed-in members post ideas into a public pool, in 5 categories (`IdeaCategory`), and vote. Only votes from members with a PAID order count toward the goal (`ideas.vote-goal`, 1,000), which pushes members to share ideas with friends. Implemented ideas (with an admin-written `impactNote`) feature on Idea Impact, naming the author only with her `featureConsent`. The pool is time-limited through the `ideaPool` feature flag (V29), which closes submissions and voting. "Paid" is evaluated at read time in one native query (`IdeaVoteRepository.countVotes`), so a voter who buys a plan later starts counting. Contract in `UI_INTEGRATION_GUIDE.md` §15; covered by `IdeaPoolTest`. The old `/feedback` endpoint is untouched; the referral link + gifts feature comes next, on its own branch.
+
+## 15. Referral links & free Premium reward
+
+Product-owner decision (2026-10-30): each member gets a referral code; after 5 referred friends buy a plan she earns a free Premium plan (full 9 months), once, and only she is rewarded. Tables in V30 (`referral_codes`, `referrals` with one row per referred member, `referral_rewards` keyed by member). `PaymentService.handleSucceeded` calls `ReferralService.onOrderPaid` **after the webhook transaction commits**, in a REQUIRES_NEW transaction with errors logged, so referral bookkeeping can never roll back a payment. The reward is a zero-price PAID order for the active PREMIUM version, plus the usual `grantForOrder` entitlements. `ReferralReward` is `Persistable` (always INSERT), so a concurrent second grant hits the primary key. Zero-price orders never qualify a referral. Claiming is for new customers only (no real PAID order yet). Contract in `UI_INTEGRATION_GUIDE.md` §16; covered by `ReferralTest`, which drives real checkouts. **V30 depends on V29 (idea pool): merge `feature/idea-impact` before this branch.** Open product-owner points: whether a refunded friend should un-qualify (today it stays counted), and whether the reward is once ever (today) or repeatable every 5.
