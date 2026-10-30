@@ -9,6 +9,7 @@ This document separates **"already in the repo before this session touched anyth
 ## 0. Repo identity
 - Spring Boot 3.3.4, Java 21, Gradle. Domain: maternity-care platform backend ("NartureBelle") — products, pregnancy checklists, doctor live sessions, nurse-companion bookings, hospital partner directory, lead capture.
 - Branches on `origin`: `main` (GitHub default, now up to date), `master`, `codestepup`, `Added_Split_IO`.
+- **Branching workflow (from 2026-10-30):** every new feature gets its own `feature/<name>` branch, created from the latest `origin/develop`, merged into `develop` by pull request; `develop` → `main` by pull request releases to production. Full rules in `README.md`.
 - Git identity used for commits in this session: `narturebelle-ux` / `narturebelle@gmail.com`.
 
 ## 1. True baseline — last real commits before this session
