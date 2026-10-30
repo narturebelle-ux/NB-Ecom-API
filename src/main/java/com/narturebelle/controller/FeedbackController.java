@@ -3,6 +3,7 @@ package com.narturebelle.controller;
 import com.narturebelle.dto.FeedbackRequest;
 import com.narturebelle.security.AuthorizationService;
 import com.narturebelle.security.FirebaseUserPrincipal;
+import com.narturebelle.security.RateLimiter;
 import com.narturebelle.service.FeedbackService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -33,6 +34,6 @@ public class FeedbackController {
         }
         Long userId = authorizationService.currentPrincipalOrEmpty().map(FirebaseUserPrincipal::userId).orElse(null);
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(Map.of("id", feedbackService.submit(req, userId, request.getRemoteAddr()).getId()));
+                .body(Map.of("id", feedbackService.submit(req, userId, RateLimiter.clientIp(request)).getId()));
     }
 }

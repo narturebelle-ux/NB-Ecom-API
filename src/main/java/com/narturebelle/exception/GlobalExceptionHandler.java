@@ -318,7 +318,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public ResponseEntity<Map<String, String>> handleUploadTooLarge(MaxUploadSizeExceededException e) {
         return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
-                .body(Map.of("code", "RESUME_TOO_LARGE", "message", "Résumé must be 5 MB or smaller."));
+                .body(Map.of("code", "RESUME_TOO_LARGE", "message", "Résumé must be 4 MB or smaller."));
     }
 
     @ExceptionHandler(SessionRecommendationException.class)

@@ -37,7 +37,8 @@ public class CareersService {
 
     private static final Logger log = LoggerFactory.getLogger(CareersService.class);
 
-    static final long MAX_RESUME_BYTES = 5L * 1024 * 1024;
+    /** 4 MB: Vercel rejects any request body over 4.5 MB, and the form fields ride along with the file. */
+    static final long MAX_RESUME_BYTES = 4L * 1024 * 1024;
 
     /** Allowed résumé types: extension -> (content type, leading magic bytes). The bytes are checked, not just the name. */
     private static final Map<String, ResumeType> RESUME_TYPES = Map.of(
@@ -216,7 +217,7 @@ public class CareersService {
             throw new CareersException(400, "VALIDATION_FAILED", "Please attach your résumé.", "resume");
         }
         if (resume.getSize() > MAX_RESUME_BYTES) {
-            throw new CareersException(413, "RESUME_TOO_LARGE", "Résumé must be 5 MB or smaller.");
+            throw new CareersException(413, "RESUME_TOO_LARGE", "Résumé must be 4 MB or smaller.");
         }
         String name = resume.getOriginalFilename() == null ? "" : resume.getOriginalFilename();
         String extension = name.contains(".") ? name.substring(name.lastIndexOf('.') + 1).toLowerCase(Locale.ROOT) : "";

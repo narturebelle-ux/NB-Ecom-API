@@ -17,8 +17,9 @@ FROM eclipse-temurin:21-jre
 WORKDIR /app
 COPY --from=build /app/build/libs/*.jar app.jar
 
-# Cloud Run injects PORT; application-prod.yml already binds server.port to it.
-EXPOSE 8080
+# Vercel's Container runtime routes to port 80 unless the project sets PORT; server.port reads PORT.
+ENV PORT=80
+EXPOSE 80
 # Use most of the container's memory for the heap (the JVM default is only 25%).
 ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75"
 ENTRYPOINT ["java", "-jar", "app.jar"]

@@ -3,6 +3,7 @@ package com.narturebelle.controller;
 import com.narturebelle.dto.JobApplicationForm;
 import com.narturebelle.dto.JobResponse;
 import com.narturebelle.model.JobApplication;
+import com.narturebelle.security.RateLimiter;
 import com.narturebelle.service.CareersService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -43,7 +44,7 @@ public class CareersController {
             // Honeypot filled: a bot. Look successful, save nothing.
             return ResponseEntity.status(HttpStatus.CREATED).body(Map.of("id", 0, "submittedAt", LocalDateTime.now()));
         }
-        JobApplication saved = careersService.apply(id, form, request.getRemoteAddr());
+        JobApplication saved = careersService.apply(id, form, RateLimiter.clientIp(request));
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(Map.of("id", saved.getId(), "submittedAt", saved.getSubmittedAt()));
     }

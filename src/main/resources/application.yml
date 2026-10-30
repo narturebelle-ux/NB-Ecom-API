@@ -29,17 +29,19 @@ spring:
     baseline-on-migrate: true
     baseline-version: 1
 
-  # Careers résumé uploads (CareersService re-checks the 5 MB cap and the file type).
+  # Careers résumé uploads (CareersService re-checks the 4 MB cap and the file type).
+  # Kept under Vercel's 4.5 MB request-body limit, so an oversized file gets our 413, not Vercel's.
   servlet:
     multipart:
-      max-file-size: 5MB
-      max-request-size: 6MB
+      max-file-size: 4MB
+      max-request-size: 4400KB
 
 # Server Port
 server:
+  # The Docker image sets PORT=80, the port Vercel's Container runtime routes to by default.
   port: ${PORT:8085}
-  # Behind Cloud Run's front end: take the client IP from X-Forwarded-For (only trusted from
-  # internal proxy addresses), so the public-form rate limits are per visitor, not per proxy.
+  # Behind a proxy: take the client IP from X-Forwarded-For (only trusted from internal proxy
+  # addresses). On Vercel, RateLimiter.clientIp reads X-Real-IP instead.
   forward-headers-strategy: native
   tomcat:
     # Read past an oversized upload so the browser gets the 413 RESUME_TOO_LARGE body, not a reset.

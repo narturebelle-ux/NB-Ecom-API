@@ -3,7 +3,7 @@ package com.narturebelle.model;
 import jakarta.persistence.*;
 
 /** The résumé file itself, kept in Postgres (bytea) rather than Supabase Storage: storage credentials
- * aren't configured in prod yet, and résumés are capped at 5 MB. Only admins can download it. */
+ * aren't configured in prod yet, and résumés are capped at 4 MB. Only admins can download it. */
 @Entity
 @Table(name = "job_application_resumes")
 public class JobApplicationResume {
