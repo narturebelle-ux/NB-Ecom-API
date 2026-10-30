@@ -31,7 +31,7 @@ public class SampleContentSeeder {
     private static final String EVENT_HOST_BIO = "Sample event — not a real gathering.";
 
     private static final int MIN_OPEN_SLOTS_PER_PROVIDER = 6;
-    private static final int MIN_OPEN_CALL_SLOTS = 8;
+    private static final int MIN_OPEN_CALL_SLOTS_PER_COORDINATOR = 4;
     private static final int MIN_UPCOMING_EVENTS = 3;
 
     // Names DataInitializer has always seeded these legacy sample rows under.
@@ -87,6 +87,7 @@ public class SampleContentSeeder {
     private final ProviderSlotRepository providerSlotRepository;
     private final OnboardingCallSlotRepository onboardingCallSlotRepository;
     private final CommunityEventRepository communityEventRepository;
+    private final CoordinatorRepository coordinatorRepository;
 
     public SampleContentSeeder(ProductRepository productRepository,
                                HospitalPartnerRepository hospitalPartnerRepository,
@@ -98,7 +99,8 @@ public class SampleContentSeeder {
                                ServiceOfferingRepository serviceOfferingRepository,
                                ProviderSlotRepository providerSlotRepository,
                                OnboardingCallSlotRepository onboardingCallSlotRepository,
-                               CommunityEventRepository communityEventRepository) {
+                               CommunityEventRepository communityEventRepository,
+                               CoordinatorRepository coordinatorRepository) {
         this.productRepository = productRepository;
         this.hospitalPartnerRepository = hospitalPartnerRepository;
         this.checklistTaskRepository = checklistTaskRepository;
@@ -110,6 +112,7 @@ public class SampleContentSeeder {
         this.providerSlotRepository = providerSlotRepository;
         this.onboardingCallSlotRepository = onboardingCallSlotRepository;
         this.communityEventRepository = communityEventRepository;
+        this.coordinatorRepository = coordinatorRepository;
     }
 
     public void run() {
@@ -277,18 +280,55 @@ public class SampleContentSeeder {
         }
     }
 
-    /** Placeholder coordinator-call availability, kept topped up so onboarding's call step always has open slots. */
+    private record SampleCoordinator(String name, List<String> languages) {}
+
+    /** Between them, every language the sample providers speak -- so any user's language has a coordinator. */
+    private static final List<SampleCoordinator> SAMPLE_COORDINATORS = List.of(
+            new SampleCoordinator("Sample Belle Coordinator — North", List.of("English", "Hindi", "Punjabi", "Bengali")),
+            new SampleCoordinator("Sample Belle Coordinator — South", List.of("English", "Tamil", "Telugu", "Malayalam", "Kannada")),
+            new SampleCoordinator("Sample Belle Coordinator — West", List.of("English", "Hindi", "Marathi", "Gujarati")));
+
+    /**
+     * Sample coordinators, each kept topped up with open call slots so onboarding's call step always has
+     * something bookable in every language. Open slots from before coordinators existed (all sample) are
+     * handed to the first sample coordinator so they stay visible.
+     */
     private void topUpOnboardingCallSlots() {
         LocalDateTime now = LocalDateTime.now();
+        List<Coordinator> coordinators = new ArrayList<>();
+        for (SampleCoordinator sample : SAMPLE_COORDINATORS) {
+            coordinators.add(coordinatorRepository.findFirstByDisplayName(sample.name()).orElseGet(() -> {
+                Coordinator coordinator = new Coordinator();
+                coordinator.setDisplayName(sample.name());
+                coordinator.setLanguages(new ArrayList<>(sample.languages()));
+                coordinator.setBio("Sample coordinator — not a real person.");
+                coordinator.setActive(true);
+                return coordinatorRepository.save(coordinator);
+            }));
+        }
+
         List<OnboardingCallSlot> open = onboardingCallSlotRepository.findByStatusAndStartAtAfterOrderByStartAtAsc(SlotStatus.OPEN, now);
-        int missing = MIN_OPEN_CALL_SLOTS - open.size();
-        LocalDateTime cursor = open.isEmpty() ? now : open.get(open.size() - 1).getStartAt();
-        for (LocalDateTime start : weekdaySlotsAfter(cursor, missing, 10, 15)) {
-            OnboardingCallSlot slot = new OnboardingCallSlot();
-            slot.setStartAt(start);
-            slot.setEndAt(start.plusMinutes(30));
-            slot.setStatus(SlotStatus.OPEN);
-            onboardingCallSlotRepository.save(slot);
+        for (OnboardingCallSlot legacy : open) {
+            if (legacy.getCoordinatorId() == null) {
+                legacy.setCoordinatorId(coordinators.get(0).getId());
+                onboardingCallSlotRepository.save(legacy);
+            }
+        }
+
+        for (Coordinator coordinator : coordinators) {
+            List<OnboardingCallSlot> theirs = open.stream()
+                    .filter(slot -> coordinator.getId().equals(slot.getCoordinatorId()))
+                    .toList();
+            int missing = MIN_OPEN_CALL_SLOTS_PER_COORDINATOR - theirs.size();
+            LocalDateTime cursor = theirs.isEmpty() ? now : theirs.get(theirs.size() - 1).getStartAt();
+            for (LocalDateTime start : weekdaySlotsAfter(cursor, missing, 10, 15)) {
+                OnboardingCallSlot slot = new OnboardingCallSlot();
+                slot.setStartAt(start);
+                slot.setEndAt(start.plusMinutes(30));
+                slot.setStatus(SlotStatus.OPEN);
+                slot.setCoordinatorId(coordinator.getId());
+                onboardingCallSlotRepository.save(slot);
+            }
         }
     }
 

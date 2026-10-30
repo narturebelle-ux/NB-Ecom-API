@@ -1,5 +1,6 @@
 package com.narturebelle.dto;
 
+import com.narturebelle.model.Coordinator;
 import com.narturebelle.model.OnboardingCallSlot;
 import com.narturebelle.model.SlotStatus;
 
@@ -11,13 +12,16 @@ public class OnboardingCallSlotResponse {
     private LocalDateTime startAt;
     private LocalDateTime endAt;
     private SlotStatus status;
+    private CoordinatorResponse coordinator;
 
-    public static OnboardingCallSlotResponse from(OnboardingCallSlot slot) {
+    /** coordinator may be null (slots created before coordinators existed). */
+    public static OnboardingCallSlotResponse from(OnboardingCallSlot slot, Coordinator coordinator) {
         OnboardingCallSlotResponse dto = new OnboardingCallSlotResponse();
         dto.id = slot.getId();
         dto.startAt = slot.getStartAt();
         dto.endAt = slot.getEndAt();
         dto.status = slot.getStatus();
+        dto.coordinator = coordinator != null ? CoordinatorResponse.summary(coordinator) : null;
         return dto;
     }
 
@@ -25,4 +29,5 @@ public class OnboardingCallSlotResponse {
     public LocalDateTime getStartAt() { return startAt; }
     public LocalDateTime getEndAt() { return endAt; }
     public SlotStatus getStatus() { return status; }
+    public CoordinatorResponse getCoordinator() { return coordinator; }
 }

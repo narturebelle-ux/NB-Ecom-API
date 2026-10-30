@@ -24,7 +24,8 @@ public class AdminOnboardingController {
     @PostMapping("/call-slots")
     public ResponseEntity<List<OnboardingCallSlotResponse>> createCallSlots(@Valid @RequestBody CreateOnboardingCallSlotsRequest req) {
         List<OnboardingCallSlotResponse> slots = onboardingService.createCallSlots(req).stream()
-                .map(OnboardingCallSlotResponse::from).toList();
+                .map(slot -> OnboardingCallSlotResponse.from(slot, onboardingService.coordinatorFor(slot).orElse(null)))
+                .toList();
         return ResponseEntity.ok(slots);
     }
 

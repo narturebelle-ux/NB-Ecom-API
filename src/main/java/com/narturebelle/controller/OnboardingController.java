@@ -46,7 +46,9 @@ public class OnboardingController {
     public ResponseEntity<OnboardingStatusResponse> status() {
         Long userId = requireUserId(authorizationService.currentPrincipal());
         OnboardingIntakeResponse intake = onboardingService.findIntake(userId).map(OnboardingIntakeResponse::from).orElse(null);
-        OnboardingCallResponse call = onboardingService.findCall(userId).map(OnboardingCallResponse::from).orElse(null);
+        OnboardingCallResponse call = onboardingService.findCall(userId)
+                .map(c -> OnboardingCallResponse.from(c, onboardingService.coordinatorForCall(c).orElse(null)))
+                .orElse(null);
         java.time.LocalDateTime callbackRequestedAt = onboardingService.findLatestCallbackRequest(userId)
                 .map(OnboardingCallbackRequest::getCreatedAt).orElse(null);
         boolean documentsSigned = onboardingService.allActiveDocumentsSigned(userId);
@@ -66,8 +68,10 @@ public class OnboardingController {
     @RequireConsent
     @GetMapping("/api/v1/onboarding/call-slots")
     public ResponseEntity<List<OnboardingCallSlotResponse>> callSlots() {
-        List<OnboardingCallSlotResponse> slots = onboardingService.listOpenCallSlots().stream()
-                .map(OnboardingCallSlotResponse::from).toList();
+        Long userId = requireUserId(authorizationService.currentPrincipal());
+        List<OnboardingCallSlotResponse> slots = onboardingService.listOpenCallSlots(userId).stream()
+                .map(slot -> OnboardingCallSlotResponse.from(slot, onboardingService.coordinatorFor(slot).orElse(null)))
+                .toList();
         return ResponseEntity.ok(slots);
     }
 
@@ -76,7 +80,7 @@ public class OnboardingController {
     public ResponseEntity<OnboardingCallResponse> bookCall(@Valid @RequestBody BookOnboardingCallRequest req) {
         Long userId = requireUserId(authorizationService.currentPrincipal());
         OnboardingCall call = onboardingService.bookCall(userId, req);
-        return ResponseEntity.ok(OnboardingCallResponse.from(call));
+        return ResponseEntity.ok(OnboardingCallResponse.from(call, onboardingService.coordinatorForCall(call).orElse(null)));
     }
 
     @RequireConsent

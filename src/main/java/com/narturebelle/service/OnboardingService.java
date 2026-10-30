@@ -5,10 +5,12 @@ import com.narturebelle.dto.CreateCallbackRequestRequest;
 import com.narturebelle.dto.CreateOnboardingCallSlotsRequest;
 import com.narturebelle.dto.SignOnboardingDocumentRequest;
 import com.narturebelle.dto.UpsertOnboardingIntakeRequest;
+import com.narturebelle.exception.CoordinatorNotFoundException;
 import com.narturebelle.exception.OnboardingCallAlreadyBookedException;
 import com.narturebelle.exception.OnboardingCallSlotNotAvailableException;
 import com.narturebelle.exception.OnboardingDocumentNotFoundException;
 import com.narturebelle.exception.OnboardingIncompleteException;
+import com.narturebelle.model.Coordinator;
 import com.narturebelle.model.OnboardingCall;
 import com.narturebelle.model.OnboardingCallSlot;
 import com.narturebelle.model.OnboardingCallbackRequest;
@@ -19,6 +21,7 @@ import com.narturebelle.model.OnboardingIntake;
 import com.narturebelle.model.OrderStatus;
 import com.narturebelle.model.SlotStatus;
 import com.narturebelle.model.User;
+import com.narturebelle.repository.CoordinatorRepository;
 import com.narturebelle.repository.OnboardingCallRepository;
 import com.narturebelle.repository.OnboardingCallSlotRepository;
 import com.narturebelle.repository.OnboardingCallbackRequestRepository;
@@ -51,6 +54,7 @@ public class OnboardingService {
     private final UserRepository userRepository;
     private final NotificationService notificationService;
     private final AuditService auditService;
+    private final CoordinatorRepository coordinatorRepository;
 
     public OnboardingService(OnboardingIntakeRepository onboardingIntakeRepository,
                               OnboardingCallSlotRepository onboardingCallSlotRepository,
@@ -62,7 +66,8 @@ public class OnboardingService {
                               OrderRepository orderRepository,
                               UserRepository userRepository,
                               NotificationService notificationService,
-                              AuditService auditService) {
+                              AuditService auditService,
+                              CoordinatorRepository coordinatorRepository) {
         this.onboardingIntakeRepository = onboardingIntakeRepository;
         this.onboardingCallSlotRepository = onboardingCallSlotRepository;
         this.onboardingCallRepository = onboardingCallRepository;
@@ -74,6 +79,7 @@ public class OnboardingService {
         this.userRepository = userRepository;
         this.notificationService = notificationService;
         this.auditService = auditService;
+        this.coordinatorRepository = coordinatorRepository;
     }
 
     public Optional<OnboardingIntake> findIntake(Long userId) {
@@ -119,8 +125,30 @@ public class OnboardingService {
         return result;
     }
 
-    public List<OnboardingCallSlot> listOpenCallSlots() {
-        return onboardingCallSlotRepository.findByStatusAndStartAtAfterOrderByStartAtAsc(SlotStatus.OPEN, LocalDateTime.now());
+    /**
+     * Open future slots whose coordinator is active and speaks one of the user's intake languages.
+     * Before she's given any languages, every slot with an active coordinator (or none, on legacy slots) is shown.
+     */
+    public List<OnboardingCallSlot> listOpenCallSlots(Long userId) {
+        List<String> languages = onboardingIntakeRepository.findByUserId(userId)
+                .map(OnboardingIntake::getLanguages).orElse(List.of());
+        return onboardingCallSlotRepository.findByStatusAndStartAtAfterOrderByStartAtAsc(SlotStatus.OPEN, LocalDateTime.now())
+                .stream()
+                .filter(slot -> {
+                    Coordinator coordinator = coordinatorFor(slot).orElse(null);
+                    if (coordinator == null) return languages.isEmpty() && slot.getCoordinatorId() == null;
+                    return coordinator.isActive() && (languages.isEmpty() || coordinator.speaksAnyOf(languages));
+                })
+                .toList();
+    }
+
+    public Optional<Coordinator> coordinatorFor(OnboardingCallSlot slot) {
+        return slot.getCoordinatorId() == null ? Optional.empty() : coordinatorRepository.findById(slot.getCoordinatorId());
+    }
+
+    /** Who'll take a booked call -- via the slot it was booked on. */
+    public Optional<Coordinator> coordinatorForCall(OnboardingCall call) {
+        return onboardingCallSlotRepository.findById(call.getSlotId()).flatMap(this::coordinatorFor);
     }
 
     public Optional<OnboardingCall> findCall(Long userId) {
@@ -170,8 +198,15 @@ public class OnboardingService {
     }
 
     public List<OnboardingCallSlot> createCallSlots(CreateOnboardingCallSlotsRequest req) {
+        for (CreateOnboardingCallSlotsRequest.SlotWindow window : req.getSlots()) {
+            coordinatorRepository.findById(window.getCoordinatorId())
+                    .filter(Coordinator::isActive)
+                    .orElseThrow(() -> new CoordinatorNotFoundException(
+                            "Active coordinator " + window.getCoordinatorId() + " not found."));
+        }
         return req.getSlots().stream().map(window -> {
             OnboardingCallSlot slot = new OnboardingCallSlot();
+            slot.setCoordinatorId(window.getCoordinatorId());
             slot.setStartAt(window.getStartAt());
             slot.setEndAt(window.getEndAt());
             slot.setStatus(SlotStatus.OPEN);

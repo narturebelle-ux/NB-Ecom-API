@@ -23,6 +23,13 @@ public class CreateOnboardingCallSlotsRequest {
         @NotNull
         private LocalDateTime endAt;
 
+        /** The active coordinator who'll take this call. */
+        @NotNull
+        private Long coordinatorId;
+
+        public Long getCoordinatorId() { return coordinatorId; }
+        public void setCoordinatorId(Long coordinatorId) { this.coordinatorId = coordinatorId; }
+
         public LocalDateTime getStartAt() { return startAt; }
         public void setStartAt(LocalDateTime startAt) { this.startAt = startAt; }
 
