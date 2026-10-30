@@ -17,6 +17,13 @@ repositories {
     mavenCentral()
 }
 
+// Byte Buddy's agent loaded as a -javaagent on the test JVM, so Mockito's inline mock maker finds
+// instrumentation already installed instead of self-attaching at runtime -- which fails on Windows
+// with "Could not self-attach" when memory is tight. (mockito-core 5.11 has no Premain-Class itself.)
+configurations {
+    mockitoAgent
+}
+
 dependencies {
     // Spring Boot Starters
     implementation 'org.springframework.boot:spring-boot-starter-web'
@@ -45,10 +52,12 @@ dependencies {
     testImplementation 'org.springframework.security:spring-security-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     testRuntimeOnly 'com.h2database:h2'
+    mockitoAgent('net.bytebuddy:byte-buddy-agent') { transitive = false }
 }
 
 tasks.named('test') {
     useJUnitPlatform()
     maxHeapSize = "512m"
     minHeapSize = "128m"
+    jvmArgs "-javaagent:${configurations.mockitoAgent.asPath}"
 }
