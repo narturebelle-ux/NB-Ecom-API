@@ -237,6 +237,51 @@ public class GlobalExceptionHandler {
                 .body(Map.of("code", "HOSPITAL_REFERRAL_NOT_FOUND", "message", e.getMessage()));
     }
 
+    @ExceptionHandler(CommunityEventNotFoundException.class)
+    public ResponseEntity<Map<String, String>> handleCommunityEventNotFound(CommunityEventNotFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(Map.of("code", "EVENT_NOT_FOUND", "message", e.getMessage()));
+    }
+
+    @ExceptionHandler(CommunityEventFullException.class)
+    public ResponseEntity<Map<String, String>> handleCommunityEventFull(CommunityEventFullException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(Map.of("code", "EVENT_FULL", "message", e.getMessage()));
+    }
+
+    @ExceptionHandler(CommunityEventNotOpenException.class)
+    public ResponseEntity<Map<String, String>> handleCommunityEventNotOpen(CommunityEventNotOpenException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(Map.of("code", "EVENT_NOT_OPEN", "message", e.getMessage()));
+    }
+
+    @ExceptionHandler(InvalidCommunityEventRequestException.class)
+    public ResponseEntity<Map<String, Object>> handleInvalidCommunityEventRequest(InvalidCommunityEventRequestException e) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("code", "VALIDATION_FAILED");
+        body.put("message", e.getMessage());
+        body.put("fields", Map.of(e.getField(), e.getMessage()));
+        return ResponseEntity.badRequest().body(body);
+    }
+
+    @ExceptionHandler(ProductNotFoundException.class)
+    public ResponseEntity<Map<String, String>> handleProductNotFound(ProductNotFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(Map.of("code", "PRODUCT_NOT_FOUND", "message", e.getMessage()));
+    }
+
+    @ExceptionHandler(DeletionRequestConflictException.class)
+    public ResponseEntity<Map<String, String>> handleDeletionRequestConflict(DeletionRequestConflictException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(Map.of("code", e.getCode(), "message", e.getMessage()));
+    }
+
+    @ExceptionHandler(DeletionRequestNotFoundException.class)
+    public ResponseEntity<Map<String, String>> handleDeletionRequestNotFound(DeletionRequestNotFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(Map.of("code", "DELETION_REQUEST_NOT_FOUND", "message", e.getMessage()));
+    }
+
     @ExceptionHandler(InvalidChildRequestException.class)
     public ResponseEntity<Map<String, Object>> handleInvalidChildRequest(InvalidChildRequestException e) {
         Map<String, Object> body = new HashMap<>();

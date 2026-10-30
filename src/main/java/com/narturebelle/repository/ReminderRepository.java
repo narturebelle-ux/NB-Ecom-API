@@ -12,6 +12,8 @@ public interface ReminderRepository extends JpaRepository<Reminder, Long> {
 
     List<Reminder> findByUserIdAndStatusOrderByCreatedAtDesc(Long userId, ReminderStatus status);
 
+    List<Reminder> findByUserIdOrderByCreatedAtDesc(Long userId);
+
     Optional<Reminder> findByUserIdAndSourceTypeAndSourceIdAndStatus(
             Long userId, ReminderSourceType sourceType, Long sourceId, ReminderStatus status);
 }

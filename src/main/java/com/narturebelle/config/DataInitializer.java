@@ -3,6 +3,8 @@ package com.narturebelle.config;
 import com.narturebelle.model.*;
 import com.narturebelle.repository.*;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -29,6 +31,8 @@ public class DataInitializer implements CommandLineRunner {
     private final OnboardingDocumentRepository onboardingDocumentRepository;
     private final VaccineScheduleVersionRepository vaccineScheduleVersionRepository;
     private final VaccineScheduleItemRepository vaccineScheduleItemRepository;
+    private final CommunityEventRepository communityEventRepository;
+    private final Environment environment;
 
     public DataInitializer(ProductRepository productRepository,
                            ChecklistTaskRepository checklistTaskRepository,
@@ -45,7 +49,9 @@ public class DataInitializer implements CommandLineRunner {
                            OnboardingCallSlotRepository onboardingCallSlotRepository,
                            OnboardingDocumentRepository onboardingDocumentRepository,
                            VaccineScheduleVersionRepository vaccineScheduleVersionRepository,
-                           VaccineScheduleItemRepository vaccineScheduleItemRepository) {
+                           VaccineScheduleItemRepository vaccineScheduleItemRepository,
+                           CommunityEventRepository communityEventRepository,
+                           Environment environment) {
         this.productRepository = productRepository;
         this.checklistTaskRepository = checklistTaskRepository;
         this.hospitalPartnerRepository = hospitalPartnerRepository;
@@ -62,23 +68,34 @@ public class DataInitializer implements CommandLineRunner {
         this.onboardingDocumentRepository = onboardingDocumentRepository;
         this.vaccineScheduleVersionRepository = vaccineScheduleVersionRepository;
         this.vaccineScheduleItemRepository = vaccineScheduleItemRepository;
+        this.communityEventRepository = communityEventRepository;
+        this.environment = environment;
     }
 
     @Override
     public void run(String... args) {
-        seedProducts();
-        seedChecklists();
-        seedHospitalPartners();
-        seedNursePackages();
-        seedDoctorSessions();
+        // Versioned config: Flyway seeds these on real databases; these calls only matter for
+        // the test profile (no Flyway), and are no-ops once a table has rows.
         seedFeatureFlags();
         seedConsentDocuments();
         seedCareProtocolSteps();
         seedPlans();
         seedPayoutRates();
-        seedOnboardingCallSlots();
         seedOnboardingDocuments();
         seedVaccineSchedule();
+
+        // Sample content (made-up products, hospitals, doctors, events, call slots) -- never in
+        // prod, where whatever users see must be real and entered through the admin endpoints.
+        if (environment.acceptsProfiles(Profiles.of("prod"))) {
+            return;
+        }
+        seedProducts();
+        seedChecklists();
+        seedHospitalPartners();
+        seedNursePackages();
+        seedDoctorSessions();
+        seedOnboardingCallSlots();
+        seedCommunityEvents();
     }
 
     /**
@@ -365,6 +382,44 @@ public class DataInitializer implements CommandLineRunner {
             item.setSortOrder(i + 1);
             vaccineScheduleItemRepository.save(item);
         }
+    }
+
+    /**
+     * Placeholder Joy Circle events so the page isn't empty before an admin creates real ones.
+     * Dates are relative to boot, so this lives here rather than in V18 (same reason as
+     * seedOnboardingCallSlots()). Hosts are generic, not real people, and there's no joinUrl --
+     * a fake meeting link would look real.
+     */
+    private void seedCommunityEvents() {
+        if (communityEventRepository.count() > 0) return;
+
+        LocalDateTime base = LocalDateTime.now().plusDays(3).withHour(18).withMinute(0).withSecond(0).withNano(0);
+        seedCommunityEvent("First-time parents' circle",
+                "An informal evening to meet other first-time parents and swap what's been working for you.",
+                "Peer support", base, Modality.VIRTUAL, null, 20);
+        seedCommunityEvent("Pregnancy journaling hour",
+                "Bring a notebook. Guided prompts for reflecting on the weeks so far, at your own pace.",
+                "Wellbeing", base.plusDays(4), Modality.VIRTUAL, null, null);
+        seedCommunityEvent("New mums' morning meet-up",
+                "Coffee and conversation for mums with little ones. Babies welcome.",
+                "Meet-up", base.plusDays(9).withHour(10), Modality.PHYSICAL, "Venue shared with attendees", 12);
+    }
+
+    private void seedCommunityEvent(String title, String description, String category, LocalDateTime startsAt,
+                                    Modality modality, String location, Integer capacity) {
+        CommunityEvent event = new CommunityEvent();
+        event.setTitle(title);
+        event.setDescription(description);
+        event.setHostName("NartureBelle community team");
+        event.setHostBio("Placeholder host pending real event scheduling.");
+        event.setCategory(category);
+        event.setStartsAt(startsAt);
+        event.setEndsAt(startsAt.plusMinutes(60));
+        event.setModality(modality);
+        event.setLocation(location);
+        event.setCapacity(capacity);
+        event.setStatus(CommunityEventStatus.SCHEDULED);
+        communityEventRepository.save(event);
     }
 
     private void seedProducts() {
