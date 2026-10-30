@@ -5,10 +5,12 @@ import com.narturebelle.dto.CreateCallbackRequestRequest;
 import com.narturebelle.dto.CreateOnboardingCallSlotsRequest;
 import com.narturebelle.dto.SignOnboardingDocumentRequest;
 import com.narturebelle.dto.UpsertOnboardingIntakeRequest;
+import com.narturebelle.exception.CoordinatorNotFoundException;
 import com.narturebelle.exception.OnboardingCallAlreadyBookedException;
 import com.narturebelle.exception.OnboardingCallSlotNotAvailableException;
 import com.narturebelle.exception.OnboardingDocumentNotFoundException;
 import com.narturebelle.exception.OnboardingIncompleteException;
+import com.narturebelle.model.Coordinator;
 import com.narturebelle.model.OnboardingCall;
 import com.narturebelle.model.OnboardingCallSlot;
 import com.narturebelle.model.OnboardingCallbackRequest;
@@ -19,6 +21,7 @@ import com.narturebelle.model.OnboardingIntake;
 import com.narturebelle.model.OrderStatus;
 import com.narturebelle.model.SlotStatus;
 import com.narturebelle.model.User;
+import com.narturebelle.repository.CoordinatorRepository;
 import com.narturebelle.repository.OnboardingCallRepository;
 import com.narturebelle.repository.OnboardingCallSlotRepository;
 import com.narturebelle.repository.OnboardingCallbackRequestRepository;
@@ -51,6 +54,8 @@ public class OnboardingService {
     private final UserRepository userRepository;
     private final NotificationService notificationService;
     private final AuditService auditService;
+    private final CoordinatorRepository coordinatorRepository;
+    private final HealthProfileService healthProfileService;
 
     public OnboardingService(OnboardingIntakeRepository onboardingIntakeRepository,
                               OnboardingCallSlotRepository onboardingCallSlotRepository,
@@ -62,7 +67,9 @@ public class OnboardingService {
                               OrderRepository orderRepository,
                               UserRepository userRepository,
                               NotificationService notificationService,
-                              AuditService auditService) {
+                              AuditService auditService,
+                              CoordinatorRepository coordinatorRepository,
+                              HealthProfileService healthProfileService) {
         this.onboardingIntakeRepository = onboardingIntakeRepository;
         this.onboardingCallSlotRepository = onboardingCallSlotRepository;
         this.onboardingCallRepository = onboardingCallRepository;
@@ -74,6 +81,8 @@ public class OnboardingService {
         this.userRepository = userRepository;
         this.notificationService = notificationService;
         this.auditService = auditService;
+        this.coordinatorRepository = coordinatorRepository;
+        this.healthProfileService = healthProfileService;
     }
 
     public Optional<OnboardingIntake> findIntake(Long userId) {
@@ -86,24 +95,65 @@ public class OnboardingService {
             fresh.setUserId(userId);
             return fresh;
         });
-        intake.setFirstPregnancy(req.getFirstPregnancy());
-        intake.setMultiples(req.getMultiples());
-        intake.setRiskFactors(req.getRiskFactors() != null ? req.getRiskFactors() : java.util.Set.of());
+        // Older clients still send health details with the intake: route them to the health profile, which
+        // enforces the HEALTH_DATA consent (403 before anything is saved, since this runs first).
+        if (req.getFirstPregnancy() != null || req.getMultiples() != null || req.getRiskFactors() != null) {
+            healthProfileService.save(userId, req.getFirstPregnancy(), req.getMultiples(), req.getRiskFactors());
+        }
         intake.setSupportWanted(req.getSupportWanted() != null ? req.getSupportWanted() : java.util.Set.of());
         intake.setCity(req.getCity());
-        intake.setLanguage(req.getLanguage());
+        List<String> languages = normaliseLanguages(req.getLanguages() != null && !req.getLanguages().isEmpty()
+                ? req.getLanguages()
+                : (req.getLanguage() != null ? List.of(req.getLanguage()) : List.of()));
+        intake.setLanguages(new ArrayList<>(languages));
+        intake.setLanguage(languages.isEmpty() ? null : languages.get(0));
         intake.setPreferredModality(req.getPreferredModality());
         intake.setPhone(req.getPhone());
         intake.setNotes(req.getNotes());
         OnboardingIntake saved = onboardingIntakeRepository.save(intake);
-        // Metadata intentionally carries no risk-factor/notes content -- only that an intake was saved.
+        // Metadata intentionally carries no notes content -- only that an intake was saved.
         auditService.record("ONBOARDING_INTAKE_SAVED", "ONBOARDING_INTAKE", String.valueOf(saved.getId()),
                 "User submitted onboarding intake");
         return saved;
     }
 
-    public List<OnboardingCallSlot> listOpenCallSlots() {
-        return onboardingCallSlotRepository.findByStatusAndStartAtAfterOrderByStartAtAsc(SlotStatus.OPEN, LocalDateTime.now());
+    /** Trimmed, blanks dropped, case-insensitive duplicates removed, her order kept. */
+    static List<String> normaliseLanguages(List<String> raw) {
+        List<String> result = new ArrayList<>();
+        for (String language : raw) {
+            if (language == null || language.isBlank()) continue;
+            String trimmed = language.trim();
+            if (result.stream().noneMatch(existing -> existing.equalsIgnoreCase(trimmed))) {
+                result.add(trimmed);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Open future slots whose coordinator is active and speaks one of the user's intake languages.
+     * Before she's given any languages, every slot with an active coordinator (or none, on legacy slots) is shown.
+     */
+    public List<OnboardingCallSlot> listOpenCallSlots(Long userId) {
+        List<String> languages = onboardingIntakeRepository.findByUserId(userId)
+                .map(OnboardingIntake::getLanguages).orElse(List.of());
+        return onboardingCallSlotRepository.findByStatusAndStartAtAfterOrderByStartAtAsc(SlotStatus.OPEN, LocalDateTime.now())
+                .stream()
+                .filter(slot -> {
+                    Coordinator coordinator = coordinatorFor(slot).orElse(null);
+                    if (coordinator == null) return languages.isEmpty() && slot.getCoordinatorId() == null;
+                    return coordinator.isActive() && (languages.isEmpty() || coordinator.speaksAnyOf(languages));
+                })
+                .toList();
+    }
+
+    public Optional<Coordinator> coordinatorFor(OnboardingCallSlot slot) {
+        return slot.getCoordinatorId() == null ? Optional.empty() : coordinatorRepository.findById(slot.getCoordinatorId());
+    }
+
+    /** Who'll take a booked call -- via the slot it was booked on. */
+    public Optional<Coordinator> coordinatorForCall(OnboardingCall call) {
+        return onboardingCallSlotRepository.findById(call.getSlotId()).flatMap(this::coordinatorFor);
     }
 
     public Optional<OnboardingCall> findCall(Long userId) {
@@ -153,8 +203,15 @@ public class OnboardingService {
     }
 
     public List<OnboardingCallSlot> createCallSlots(CreateOnboardingCallSlotsRequest req) {
+        for (CreateOnboardingCallSlotsRequest.SlotWindow window : req.getSlots()) {
+            coordinatorRepository.findById(window.getCoordinatorId())
+                    .filter(Coordinator::isActive)
+                    .orElseThrow(() -> new CoordinatorNotFoundException(
+                            "Active coordinator " + window.getCoordinatorId() + " not found."));
+        }
         return req.getSlots().stream().map(window -> {
             OnboardingCallSlot slot = new OnboardingCallSlot();
+            slot.setCoordinatorId(window.getCoordinatorId());
             slot.setStartAt(window.getStartAt());
             slot.setEndAt(window.getEndAt());
             slot.setStatus(SlotStatus.OPEN);

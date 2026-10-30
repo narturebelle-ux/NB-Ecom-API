@@ -31,13 +31,15 @@ public class OrderService {
     private final InstallmentScheduleRepository installmentScheduleRepository;
     private final PlanService planService;
     private final AuditService auditService;
+    private final PlanPricing planPricing;
 
     public OrderService(OrderRepository orderRepository, InstallmentScheduleRepository installmentScheduleRepository,
-                         PlanService planService, AuditService auditService) {
+                         PlanService planService, AuditService auditService, PlanPricing planPricing) {
         this.orderRepository = orderRepository;
         this.installmentScheduleRepository = installmentScheduleRepository;
         this.planService = planService;
         this.auditService = auditService;
+        this.planPricing = planPricing;
     }
 
     public Order createOrder(Long userId, CreateOrderRequest req, String idempotencyKey) {
@@ -55,9 +57,11 @@ public class OrderService {
         PlanVersion planVersion = planService.findActiveVersion(req.getPlanId())
                 .orElseThrow(() -> new PlanNotFoundException("No active plan found for id " + req.getPlanId()));
 
-        BigDecimal price = req.getPaymentMode() == PaymentMode.ONE_TIME
+        // Priced server-side from her due date at this moment (PlanPricing) -- nothing the client sends affects it.
+        PlanPricing.Duration duration = planPricing.durationFor(userId);
+        BigDecimal price = PlanPricing.prorate(req.getPaymentMode() == PaymentMode.ONE_TIME
                 ? planVersion.getOneTimePrice()
-                : planVersion.getInstallmentTotalPrice();
+                : planVersion.getInstallmentTotalPrice(), duration.months());
 
         Order order = new Order();
         order.setUserId(userId);
@@ -67,6 +71,8 @@ public class OrderService {
         order.setStatus(OrderStatus.PENDING);
         order.setPaymentMode(req.getPaymentMode());
         order.setPrice(price);
+        order.setMonths(duration.months());
+        order.setPricedDueDate(duration.dueDate());
 
         Order saved;
         try {
@@ -83,7 +89,7 @@ public class OrderService {
         }
 
         auditService.record("ORDER_CREATED", "Order", String.valueOf(saved.getId()), null,
-                Map.of("planVersionId", saved.getPlanVersionId(), "price", saved.getPrice().toString()));
+                Map.of("planVersionId", saved.getPlanVersionId(), "price", saved.getPrice().toString(), "months", saved.getMonths()));
 
         return saved;
     }
@@ -102,7 +108,7 @@ public class OrderService {
 
     /** Placeholder cadence: evenly split, 30 days apart, first installment due immediately. */
     private void generateInstallmentSchedule(Order order, PlanVersion planVersion) {
-        int count = planVersion.getInstallmentCount();
+        int count = PlanPricing.installmentCount(planVersion.getInstallmentCount(), order.effectiveMonths());
         BigDecimal total = order.getPrice();
         BigDecimal perInstallment = total.divide(BigDecimal.valueOf(count), 2, RoundingMode.DOWN);
         BigDecimal allocated = BigDecimal.ZERO;

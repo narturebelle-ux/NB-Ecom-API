@@ -9,4 +9,5 @@ import java.util.Optional;
 public interface OnboardingCallbackRequestRepository extends JpaRepository<OnboardingCallbackRequest, Long> {
     List<OnboardingCallbackRequest> findAllByOrderByCreatedAtDesc();
     Optional<OnboardingCallbackRequest> findTopByUserIdOrderByCreatedAtDesc(Long userId);
+    List<OnboardingCallbackRequest> findByUserIdOrderByCreatedAtDesc(Long userId);
 }

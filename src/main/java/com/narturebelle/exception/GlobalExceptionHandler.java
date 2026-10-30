@@ -9,8 +9,11 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
@@ -213,6 +216,153 @@ public class GlobalExceptionHandler {
                 .body(Map.of("code", "ONBOARDING_DOCUMENT_NOT_FOUND", "message", e.getMessage()));
     }
 
+    @ExceptionHandler(ChildNotFoundException.class)
+    public ResponseEntity<Map<String, String>> handleChildNotFound(ChildNotFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(Map.of("code", "CHILD_NOT_FOUND", "message", e.getMessage()));
+    }
+
+    @ExceptionHandler(VaccineScheduleItemNotFoundException.class)
+    public ResponseEntity<Map<String, String>> handleVaccineScheduleItemNotFound(VaccineScheduleItemNotFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(Map.of("code", "VACCINE_SCHEDULE_ITEM_NOT_FOUND", "message", e.getMessage()));
+    }
+
+    @ExceptionHandler(HospitalNotFoundException.class)
+    public ResponseEntity<Map<String, String>> handleHospitalNotFound(HospitalNotFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(Map.of("code", "HOSPITAL_NOT_FOUND", "message", e.getMessage()));
+    }
+
+    @ExceptionHandler(HospitalReferralNotFoundException.class)
+    public ResponseEntity<Map<String, String>> handleHospitalReferralNotFound(HospitalReferralNotFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(Map.of("code", "HOSPITAL_REFERRAL_NOT_FOUND", "message", e.getMessage()));
+    }
+
+    @ExceptionHandler(CommunityEventNotFoundException.class)
+    public ResponseEntity<Map<String, String>> handleCommunityEventNotFound(CommunityEventNotFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(Map.of("code", "EVENT_NOT_FOUND", "message", e.getMessage()));
+    }
+
+    @ExceptionHandler(CommunityEventFullException.class)
+    public ResponseEntity<Map<String, String>> handleCommunityEventFull(CommunityEventFullException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(Map.of("code", "EVENT_FULL", "message", e.getMessage()));
+    }
+
+    @ExceptionHandler(CommunityEventNotOpenException.class)
+    public ResponseEntity<Map<String, String>> handleCommunityEventNotOpen(CommunityEventNotOpenException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(Map.of("code", "EVENT_NOT_OPEN", "message", e.getMessage()));
+    }
+
+    @ExceptionHandler(InvalidCommunityEventRequestException.class)
+    public ResponseEntity<Map<String, Object>> handleInvalidCommunityEventRequest(InvalidCommunityEventRequestException e) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("code", "VALIDATION_FAILED");
+        body.put("message", e.getMessage());
+        body.put("fields", Map.of(e.getField(), e.getMessage()));
+        return ResponseEntity.badRequest().body(body);
+    }
+
+    @ExceptionHandler(ProductNotFoundException.class)
+    public ResponseEntity<Map<String, String>> handleProductNotFound(ProductNotFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(Map.of("code", "PRODUCT_NOT_FOUND", "message", e.getMessage()));
+    }
+
+    @ExceptionHandler(DeletionRequestConflictException.class)
+    public ResponseEntity<Map<String, String>> handleDeletionRequestConflict(DeletionRequestConflictException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(Map.of("code", e.getCode(), "message", e.getMessage()));
+    }
+
+    @ExceptionHandler(DeletionRequestNotFoundException.class)
+    public ResponseEntity<Map<String, String>> handleDeletionRequestNotFound(DeletionRequestNotFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(Map.of("code", "DELETION_REQUEST_NOT_FOUND", "message", e.getMessage()));
+    }
+
+    @ExceptionHandler(ChecklistTaskNotFoundException.class)
+    public ResponseEntity<Map<String, String>> handleChecklistTaskNotFound(ChecklistTaskNotFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(Map.of("code", "CHECKLIST_TASK_NOT_FOUND", "message", e.getMessage()));
+    }
+
+    @ExceptionHandler(CatalogItemInUseException.class)
+    public ResponseEntity<Map<String, String>> handleCatalogItemInUse(CatalogItemInUseException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(Map.of("code", "CATALOG_ITEM_IN_USE", "message", e.getMessage()));
+    }
+
+    @ExceptionHandler(DueDateLockedException.class)
+    public ResponseEntity<Map<String, String>> handleDueDateLocked(DueDateLockedException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(Map.of("code", "DUE_DATE_LOCKED", "message", e.getMessage()));
+    }
+
+    @ExceptionHandler(CareersException.class)
+    public ResponseEntity<Map<String, Object>> handleCareers(CareersException e) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("code", e.getCode());
+        body.put("message", e.getMessage());
+        if (e.getField() != null) {
+            body.put("fields", Map.of(e.getField(), e.getMessage()));
+        }
+        return ResponseEntity.status(e.getStatus()).body(body);
+    }
+
+    /** Only multipart endpoint today is the careers application, so an oversized upload is the résumé. */
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<Map<String, String>> handleUploadTooLarge(MaxUploadSizeExceededException e) {
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
+                .body(Map.of("code", "RESUME_TOO_LARGE", "message", "Résumé must be 4 MB or smaller."));
+    }
+
+    @ExceptionHandler(SessionRecommendationException.class)
+    public ResponseEntity<Map<String, String>> handleSessionRecommendation(SessionRecommendationException e) {
+        return ResponseEntity.status(e.getStatus())
+                .body(Map.of("code", e.getCode(), "message", e.getMessage()));
+    }
+
+    @ExceptionHandler(ProductHealthRuleException.class)
+    public ResponseEntity<Map<String, String>> handleProductHealthRule(ProductHealthRuleException e) {
+        return ResponseEntity.status(e.getStatus())
+                .body(Map.of("code", e.getCode(), "message", e.getMessage()));
+    }
+
+    @ExceptionHandler(HealthProfileNotFoundException.class)
+    public ResponseEntity<Map<String, String>> handleHealthProfileNotFound(HealthProfileNotFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(Map.of("code", "HEALTH_PROFILE_NOT_FOUND", "message", e.getMessage()));
+    }
+
+    @ExceptionHandler(CoordinatorNotFoundException.class)
+    public ResponseEntity<Map<String, String>> handleCoordinatorNotFound(CoordinatorNotFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(Map.of("code", "COORDINATOR_NOT_FOUND", "message", e.getMessage()));
+    }
+
+    @ExceptionHandler(MatchProfileIncompleteException.class)
+    public ResponseEntity<Map<String, Object>> handleMatchProfileIncomplete(MatchProfileIncompleteException e) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("code", "MATCH_PROFILE_INCOMPLETE");
+        body.put("message", e.getMessage());
+        body.put("missing", e.getMissing());
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
+    }
+
+    @ExceptionHandler(InvalidChildRequestException.class)
+    public ResponseEntity<Map<String, Object>> handleInvalidChildRequest(InvalidChildRequestException e) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("code", "VALIDATION_FAILED");
+        body.put("message", e.getMessage());
+        body.put("fields", Map.of(e.getField(), e.getMessage()));
+        return ResponseEntity.badRequest().body(body);
+    }
+
     /**
      * A required header (e.g. Idempotency-Key) is missing. Without this, Spring's
      * MissingRequestHeaderException would fall through to the 500 catch-all below instead of a 400 —
@@ -224,6 +374,25 @@ public class GlobalExceptionHandler {
         body.put("code", "VALIDATION_FAILED");
         body.put("message", "Missing required header: " + e.getHeaderName());
         body.put("fields", Map.of(e.getHeaderName(), "This header is required."));
+        return ResponseEntity.badRequest().body(body);
+    }
+
+    /** A query/path parameter that can't be converted (e.g. ?professionalType=NOPE) -- a 400, not the 500 catch-all. */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<Map<String, Object>> handleTypeMismatch(MethodArgumentTypeMismatchException e) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("code", "VALIDATION_FAILED");
+        body.put("message", "Invalid value for parameter: " + e.getName());
+        body.put("fields", Map.of(e.getName(), "Invalid value: " + e.getValue()));
+        return ResponseEntity.badRequest().body(body);
+    }
+
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<Map<String, Object>> handleMissingParameter(MissingServletRequestParameterException e) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("code", "VALIDATION_FAILED");
+        body.put("message", "Missing required parameter: " + e.getParameterName());
+        body.put("fields", Map.of(e.getParameterName(), "This parameter is required."));
         return ResponseEntity.badRequest().body(body);
     }
 

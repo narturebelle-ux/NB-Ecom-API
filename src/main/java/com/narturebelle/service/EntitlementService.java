@@ -49,7 +49,8 @@ public class EntitlementService {
             entitlement.setUserId(order.getUserId());
             entitlement.setOrderId(order.getId());
             entitlement.setProfessionalType(allocation.getProfessionalType());
-            entitlement.setTotalSessions(allocation.getSessionCount());
+            // Sessions in proportion to the months paid for (PlanPricing); 9 months = the plan's full allocation.
+            entitlement.setTotalSessions(PlanPricing.prorateSessions(allocation.getSessionCount(), order.effectiveMonths()));
             entitlement.setUsedSessions(0);
             entitlement.setExpiresAt(expiresAt);
             try {

@@ -19,6 +19,8 @@ public class OrderResponse {
     private OrderStatus status;
     private PaymentMode paymentMode;
     private BigDecimal price;
+    /** Months of the plan this order pays for (9 = the full plan). */
+    private Integer months;
     private List<InstallmentScheduleResponse> installmentSchedule;
     private List<RefundResponse> refunds;
     private LocalDateTime createdAt;
@@ -32,6 +34,7 @@ public class OrderResponse {
         dto.status = order.getStatus();
         dto.paymentMode = order.getPaymentMode();
         dto.price = order.getPrice();
+        dto.months = order.effectiveMonths();
         dto.installmentSchedule = installmentSchedule.stream().map(InstallmentScheduleResponse::from).toList();
         dto.refunds = refunds.stream().map(RefundResponse::from).toList();
         dto.createdAt = order.getCreatedAt();
@@ -44,6 +47,7 @@ public class OrderResponse {
     public OrderStatus getStatus() { return status; }
     public PaymentMode getPaymentMode() { return paymentMode; }
     public BigDecimal getPrice() { return price; }
+    public Integer getMonths() { return months; }
     public List<InstallmentScheduleResponse> getInstallmentSchedule() { return installmentSchedule; }
     public List<RefundResponse> getRefunds() { return refunds; }
     public LocalDateTime getCreatedAt() { return createdAt; }

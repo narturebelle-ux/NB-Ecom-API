@@ -25,8 +25,10 @@ public class DataInitializer implements CommandLineRunner {
     private final PlanVersionRepository planVersionRepository;
     private final PlanEntitlementRepository planEntitlementRepository;
     private final PayoutRateRepository payoutRateRepository;
-    private final OnboardingCallSlotRepository onboardingCallSlotRepository;
     private final OnboardingDocumentRepository onboardingDocumentRepository;
+    private final VaccineScheduleVersionRepository vaccineScheduleVersionRepository;
+    private final VaccineScheduleItemRepository vaccineScheduleItemRepository;
+    private final SampleContentSeeder sampleContentSeeder;
 
     public DataInitializer(ProductRepository productRepository,
                            ChecklistTaskRepository checklistTaskRepository,
@@ -40,8 +42,10 @@ public class DataInitializer implements CommandLineRunner {
                            PlanVersionRepository planVersionRepository,
                            PlanEntitlementRepository planEntitlementRepository,
                            PayoutRateRepository payoutRateRepository,
-                           OnboardingCallSlotRepository onboardingCallSlotRepository,
-                           OnboardingDocumentRepository onboardingDocumentRepository) {
+                           OnboardingDocumentRepository onboardingDocumentRepository,
+                           VaccineScheduleVersionRepository vaccineScheduleVersionRepository,
+                           VaccineScheduleItemRepository vaccineScheduleItemRepository,
+                           SampleContentSeeder sampleContentSeeder) {
         this.productRepository = productRepository;
         this.checklistTaskRepository = checklistTaskRepository;
         this.hospitalPartnerRepository = hospitalPartnerRepository;
@@ -54,24 +58,33 @@ public class DataInitializer implements CommandLineRunner {
         this.planVersionRepository = planVersionRepository;
         this.planEntitlementRepository = planEntitlementRepository;
         this.payoutRateRepository = payoutRateRepository;
-        this.onboardingCallSlotRepository = onboardingCallSlotRepository;
         this.onboardingDocumentRepository = onboardingDocumentRepository;
+        this.vaccineScheduleVersionRepository = vaccineScheduleVersionRepository;
+        this.vaccineScheduleItemRepository = vaccineScheduleItemRepository;
+        this.sampleContentSeeder = sampleContentSeeder;
     }
 
     @Override
     public void run(String... args) {
-        seedProducts();
-        seedChecklists();
-        seedHospitalPartners();
-        seedNursePackages();
-        seedDoctorSessions();
+        // Versioned config: Flyway seeds these on real databases; these calls only matter for
+        // the test profile (no Flyway), and are no-ops once a table has rows.
         seedFeatureFlags();
         seedConsentDocuments();
         seedCareProtocolSteps();
         seedPlans();
         seedPayoutRates();
-        seedOnboardingCallSlots();
         seedOnboardingDocuments();
+        seedVaccineSchedule();
+
+        // Sample content, in every profile including prod (product-owner decision, 2026-10-30), so no
+        // listable endpoint comes back empty. SampleContentSeeder labels all of it as sample, adds providers
+        // and baby-care products, and tops up time-based lists (slots, events) on every boot.
+        seedProducts();
+        seedChecklists();
+        seedHospitalPartners();
+        seedNursePackages();
+        seedDoctorSessions();
+        sampleContentSeeder.run();
     }
 
     /**
@@ -105,8 +118,8 @@ public class DataInitializer implements CommandLineRunner {
     }
 
     /**
-     * Normally seeded by V5__consent.sql, but the test profile skips Flyway entirely (see
-     * seedFeatureFlags() above for the same pattern) — this keeps H2 in sync with that seed data.
+     * Normally seeded by V5__consent.sql, V21__records_storage_consent.sql and V24__health_profiles.sql, but the test profile skips
+     * Flyway entirely (see seedFeatureFlags() above for the same pattern) — this keeps H2 in sync with that seed data.
      */
     private void seedConsentDocuments() {
         if (consentDocumentRepository.count() > 0) return;
@@ -115,6 +128,15 @@ public class DataInitializer implements CommandLineRunner {
                 "# Terms of Service (DRAFT)\n\nThis is placeholder text pending legal review. Do not treat this as a final or binding document.");
         seedConsentDocument(ConsentDocumentType.PRIVACY, 1, "Privacy Notice",
                 "# Privacy Notice (DRAFT)\n\nThis is placeholder text pending legal review. Do not treat this as a final or binding document.");
+        seedConsentDocument(ConsentDocumentType.RECORDS_STORAGE, 1, "Health Records Storage",
+                "# Health Records Storage (DRAFT)\n\nI agree to NartureBelle storing the documents I upload. "
+                        + "This is placeholder text pending legal review. Do not treat this as a final or binding document.");
+        // HEALTH_DATA: v1 superseded by v2 (V26), which adds that her care professionals can see these details.
+        seedConsentDocument(ConsentDocumentType.HEALTH_DATA, 2, "Health Details",
+                "# Health Details (DRAFT)\n\nI agree to NartureBelle storing the health details I share (such as first pregnancy, "
+                        + "multiples and risk factors) and using them to tailor my recommendations. I also agree that the care "
+                        + "professionals I book sessions with can see these details during my sessions. "
+                        + "This is placeholder text pending legal review. Do not treat this as a final or binding document.");
     }
 
     /**
@@ -274,29 +296,6 @@ public class DataInitializer implements CommandLineRunner {
         }
     }
 
-    /**
-     * Placeholder coordinator-call availability so the onboarding call step is actually bookable
-     * in every environment without an admin manually seeding slots first. Real coordinator-calendar
-     * integration doesn't exist (see HANDOFF.md's Onboarding section) -- this is a fixed weekday
-     * 10am slate for the next two weeks, re-seeded harmlessly skipped once any slot already exists.
-     */
-    private void seedOnboardingCallSlots() {
-        if (onboardingCallSlotRepository.count() > 0) return;
-
-        LocalDateTime cursor = LocalDateTime.now().plusDays(1).withHour(10).withMinute(0).withSecond(0).withNano(0);
-        int seeded = 0;
-        while (seeded < 10) {
-            if (cursor.getDayOfWeek() != java.time.DayOfWeek.SATURDAY && cursor.getDayOfWeek() != java.time.DayOfWeek.SUNDAY) {
-                OnboardingCallSlot slot = new OnboardingCallSlot();
-                slot.setStartAt(cursor);
-                slot.setEndAt(cursor.plusMinutes(30));
-                slot.setStatus(SlotStatus.OPEN);
-                onboardingCallSlotRepository.save(slot);
-                seeded++;
-            }
-            cursor = cursor.plusDays(1);
-        }
-    }
 
     /**
      * Normally seeded by V15__onboarding_documents.sql, but the test profile skips Flyway entirely
@@ -314,6 +313,50 @@ public class DataInitializer implements CommandLineRunner {
         document.setEffectiveAt(LocalDateTime.now());
         document.setActive(true);
         onboardingDocumentRepository.save(document);
+    }
+
+    /**
+     * Normally seeded by V16__child_and_vaccinations.sql; same test-profile fallback as
+     * seedOnboardingDocuments() above. Keep the two lists identical.
+     */
+    private void seedVaccineSchedule() {
+        if (vaccineScheduleVersionRepository.count() > 0) return;
+
+        VaccineScheduleVersion version = new VaccineScheduleVersion();
+        version.setVersion(1);
+        version.setTitle("Reference childhood schedule (draft)");
+        version.setReviewStatus(ReviewStatus.PENDING_CLINICAL_REVIEW);
+        version.setEffectiveAt(LocalDateTime.now());
+        version.setActive(true);
+        Long versionId = vaccineScheduleVersionRepository.save(version).getId();
+
+        Object[][] doses = {
+                {"BCG", 0, "Birth"},
+                {"Hepatitis B (Birth Dose)", 0, "Birth"},
+                {"OPV (Birth Dose)", 0, "Birth"},
+                {"Pentavalent 1 (DTwP-HepB-Hib)", 42, "6 weeks"},
+                {"Rotavirus 1", 42, "6 weeks"},
+                {"PCV 1", 42, "6 weeks"},
+                {"Pentavalent 2", 70, "10 weeks"},
+                {"Rotavirus 2", 70, "10 weeks"},
+                {"PCV 2", 70, "10 weeks"},
+                {"Pentavalent 3", 98, "14 weeks"},
+                {"Rotavirus 3", 98, "14 weeks"},
+                {"PCV Booster", 274, "9 months"},
+                {"MMR 1", 274, "9 months"},
+                {"MMR 2", 457, "15 months"},
+                {"DTwP Booster 1", 487, "16 months"},
+                {"OPV Booster", 487, "16 months"},
+        };
+        for (int i = 0; i < doses.length; i++) {
+            VaccineScheduleItem item = new VaccineScheduleItem();
+            item.setScheduleVersionId(versionId);
+            item.setVaccineName((String) doses[i][0]);
+            item.setDueAgeDays((Integer) doses[i][1]);
+            item.setDueAgeLabel((String) doses[i][2]);
+            item.setSortOrder(i + 1);
+            vaccineScheduleItemRepository.save(item);
+        }
     }
 
     private void seedProducts() {

@@ -4,7 +4,7 @@ import jakarta.persistence.*;
 
 import java.time.LocalDateTime;
 
-/** A care-coordinator call slot. Not linked to any specific coordinator identity -- no coordinator portal exists yet. */
+/** A care-coordinator call slot, belonging to one Coordinator (null only on slots created before coordinators existed). */
 @Entity
 @Table(name = "onboarding_call_slots")
 public class OnboardingCallSlot {
@@ -22,6 +22,8 @@ public class OnboardingCallSlot {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private SlotStatus status;
+
+    private Long coordinatorId;
 
     @Column(nullable = false)
     private LocalDateTime createdAt;
@@ -46,6 +48,9 @@ public class OnboardingCallSlot {
 
     public SlotStatus getStatus() { return status; }
     public void setStatus(SlotStatus status) { this.status = status; }
+
+    public Long getCoordinatorId() { return coordinatorId; }
+    public void setCoordinatorId(Long coordinatorId) { this.coordinatorId = coordinatorId; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }

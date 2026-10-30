@@ -3,7 +3,9 @@ package com.narturebelle.model;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 @Entity
 @Table(name = "products")
@@ -55,7 +57,16 @@ public class Product {
     @Column(name = "symptom")
     private List<String> targetSymptoms = new ArrayList<>();
 
+    /** Lower-case labels (e.g. "high-sugar") that clinically reviewed ProductHealthRules refer to. Not part of recommendations. */
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "product_tags", joinColumns = @JoinColumn(name = "product_id"))
+    @Column(name = "tag")
+    private Set<String> tags = new HashSet<>();
+
     public Product() {}
+
+    public Set<String> getTags() { return tags; }
+    public void setTags(Set<String> tags) { this.tags = tags; }
 
     public Product(Long id, String name, String description, BigDecimal price, BigDecimal originalPrice,
                    PregnancyStage stage, NecessityTier tier, String clinicalRationale, String imageUrl,
