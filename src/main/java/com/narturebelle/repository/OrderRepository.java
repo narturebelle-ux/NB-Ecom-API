@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Optional;
 
 public interface OrderRepository extends JpaRepository<Order, Long> {
+    boolean existsByUserId(Long userId);
     Optional<Order> findByUserIdAndIdempotencyKey(Long userId, String idempotencyKey);
     List<Order> findByUserIdOrderByCreatedAtDesc(Long userId);
     List<Order> findByStatusIn(List<OrderStatus> statuses);

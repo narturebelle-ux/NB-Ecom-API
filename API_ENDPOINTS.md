@@ -95,3 +95,14 @@ Errors are JSON `{"code": "...", "message": "..."}` — `401 UNAUTHENTICATED`, `
 Cart (pre-checkout) still isn't implemented — Phase 2 went straight from plan selection to order creation, no intermediate cart resource.
 
 When extending any of the above, reuse `AuthorizationService.requireSelfOrAdmin(...)` (or `.requireBookingAccess(...)` for the three-way owner/provider/admin case) for per-resource ownership and `@RequireVerified`/`@RequireConsent` for the respective gates — all already exist (`com.narturebelle.security`) for this purpose.
+
+## Care professional onboarding
+
+Full contract: `UI_INTEGRATION_GUIDE.md`, "Care professional onboarding".
+
+| Path | Who |
+|---|---|
+| `/api/v1/public/**` (`apply-info`, `providers/{id}/credentials`) | Public |
+| `/api/v1/provider-application/**` (application, documents, submit, withdraw, setup) | Signed in |
+| `/api/v1/provider-workspace/**` (services, slots, earnings, product activity, profile, change requests) | Signed in, approved application |
+| `/api/v1/admin/provider-applications/**` (queue, decisions, go-live, status, change requests) | `OPERATIONS_ADMIN` or `MEDICAL_REVIEWER` only |
