@@ -116,7 +116,7 @@ public class AccountDataService {
      * transaction so element collections load. Health-record files themselves aren't included --
      * only their metadata; the files stay downloadable through /records/{id}/download-url.
      */
-    @Transactional(readOnly = true)
+    @Transactional
     public byte[] export(Long userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UserProfileNotFoundException("User profile not found."));

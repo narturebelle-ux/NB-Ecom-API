@@ -91,6 +91,15 @@ class AccountDataTest {
         childRepository.save(child);
     }
 
+    /** The export writes an audit row, which real Postgres refuses in a read-only transaction. H2 doesn't, so only this catches it. */
+    @Test
+    void export_isNotReadOnly_becauseItWritesAnAuditRow() throws Exception {
+        org.springframework.transaction.annotation.Transactional transactional =
+                com.narturebelle.service.AccountDataService.class.getMethod("export", Long.class)
+                        .getAnnotation(org.springframework.transaction.annotation.Transactional.class);
+        assertEquals(false, transactional.readOnly());
+    }
+
     @Test
     void export_isAnAttachmentWithOnlyTheCallersData() throws Exception {
         addChild(userA, "Asha");
