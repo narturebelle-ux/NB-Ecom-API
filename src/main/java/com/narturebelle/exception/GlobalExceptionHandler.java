@@ -1,5 +1,7 @@
 package com.narturebelle.exception;
 
+import com.narturebelle.providers.exception.ProviderOnboardingException;
+import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -14,6 +16,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
@@ -308,11 +311,13 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(e.getStatus()).body(body);
     }
 
-    /** Only multipart endpoint today is the careers application, so an oversized upload is the résumé. */
+    /** Careers keeps its own code. Provider onboarding uploads, the other multipart endpoints, keep theirs. */
     @ExceptionHandler(MaxUploadSizeExceededException.class)
-    public ResponseEntity<Map<String, String>> handleUploadTooLarge(MaxUploadSizeExceededException e) {
-        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
-                .body(Map.of("code", "RESUME_TOO_LARGE", "message", "Résumé must be 4 MB or smaller."));
+    public ResponseEntity<Map<String, String>> handleUploadTooLarge(MaxUploadSizeExceededException e, HttpServletRequest request) {
+        boolean onboarding = request.getRequestURI().contains("/provider-application") || request.getRequestURI().contains("/provider-workspace");
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).body(onboarding
+                ? Map.of("code", "DOCUMENT_TOO_LARGE", "message", "Please upload a file of 4 MB or less.")
+                : Map.of("code", "RESUME_TOO_LARGE", "message", "Résumé must be 4 MB or smaller."));
     }
 
     @ExceptionHandler(IdeaException.class)
@@ -325,6 +330,19 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, String>> handleReferral(ReferralException e) {
         return ResponseEntity.status(e.getStatus())
                 .body(Map.of("code", e.getCode(), "message", e.getMessage()));
+    }
+
+    @ExceptionHandler(ProviderOnboardingException.class)
+    public ResponseEntity<Map<String, Object>> handleProviderOnboarding(ProviderOnboardingException e) {
+        Map<String, Object> body = new HashMap<>(e.getDetails());
+        body.put("code", e.getCode());
+        body.put("message", e.getMessage());
+        return ResponseEntity.status(e.getStatus()).body(body);
+    }
+
+    @ExceptionHandler(MissingServletRequestPartException.class)
+    public ResponseEntity<Map<String, String>> handleMissingPart(MissingServletRequestPartException e) {
+        return ResponseEntity.badRequest().body(Map.of("code", "VALIDATION_FAILED", "message", "The request was not valid."));
     }
 
     @ExceptionHandler(InputValidationException.class)

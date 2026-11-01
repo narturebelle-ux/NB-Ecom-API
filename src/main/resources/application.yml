@@ -49,7 +49,7 @@ server:
 
 # CORS — set here once for every environment/profile (no per-profile override).
 cors:
-  allowed-origins: "https://narturebelle.com,https://www.narturebelle.com,https://stage-narturebelle.com,http://localhost:*"
+  allowed-origins: "https://narturebelle.com,https://www.narturebelle.com,https://stage-narturebelle.com,https://staging.narturebelle.com,http://localhost:*"
 
 # Firebase Credentials — tried in order: base64 env var, then local file, then ADC.
 firebase:
@@ -98,6 +98,26 @@ careers:
 # Idea pool: paid members' votes an idea needs before it is considered for implementation.
 ideas:
   vote-goal: ${IDEAS_VOTE_GOAL:1000}
+
+# Encrypts care professionals' PAN and bank account numbers (AES-256-GCM). Base64 of 32 random bytes.
+# Optional for now: without it the app starts, but FieldEncryptor refuses those fields with a 503.
+data:
+  encryption-key: ${DATA_ENCRYPTION_KEY:}
+
+onboarding:
+  # Firebase must report a verified email AND a verified phone before an application can be submitted.
+  require-phone-verification: ${REQUIRE_PHONE_VERIFICATION:true}
+  # Off in prod until the real fixed fees, agreement and training text are in place (see application-prod.yml)
+  agreement-signing-enabled: ${AGREEMENT_SIGNING_ENABLED:true}
+  # The approved time periods.
+  reapply-after-months: 6
+  draft-first-reminder-days: 3
+  draft-second-reminder-days: 14
+  draft-delete-days: 90
+  changes-close-days: 30
+  recheck-after-days: 60
+  licence-reminder-days: 60,30,7
+  retention-months: 12
 
 narturebelle:
   scheduling:

@@ -9,11 +9,13 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataAccessException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.TransactionException;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
@@ -51,7 +53,16 @@ public class FirebaseAuthenticationFilter extends OncePerRequestFilter {
         if (header != null && header.startsWith("Bearer ")) {
             String token = header.substring(7).trim();
             if (!token.isEmpty()) {
-                authenticate(token);
+                try {
+                    authenticate(token);
+                } catch (DataAccessException | TransactionException e) {
+                    // The token may be fine: reporting this as 401 would tell the UI the person is signed out.
+                    log.error("Could not load the signed-in user", e);
+                    response.setStatus(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
+                    response.setContentType("application/json");
+                    response.getWriter().write("{\"code\":\"SERVICE_UNAVAILABLE\",\"message\":\"Please try again in a moment.\"}");
+                    return;
+                }
             }
         }
 
@@ -59,31 +70,33 @@ public class FirebaseAuthenticationFilter extends OncePerRequestFilter {
     }
 
     private void authenticate(String token) {
+        VerifiedFirebaseToken verified;
         try {
-            VerifiedFirebaseToken verified = tokenVerifier.verify(token);
-            Optional<User> dbUser = userRepository.findByFirebaseUid(verified.uid());
-            Long userId = dbUser.map(User::getId).orElse(null);
-            Set<Role> roles = dbUser.map(User::getRoles)
-                    .filter(r -> !r.isEmpty())
-                    .orElse(Set.of(Role.MOTHER));
-
-            FirebaseUserPrincipal principal = new FirebaseUserPrincipal(
-                    userId, verified.uid(), verified.email(), verified.emailVerified(),
-                    verified.phone(), verified.phone() != null, roles, verified.name()
-            );
-
-            List<GrantedAuthority> authorities = new ArrayList<>();
-            for (Role role : roles) {
-                authorities.add(new SimpleGrantedAuthority("ROLE_" + role.name()));
-            }
-            if (principal.isVerified()) {
-                authorities.add(new SimpleGrantedAuthority("VERIFIED"));
-            }
-            SecurityContextHolder.getContext().setAuthentication(
-                    new UsernamePasswordAuthenticationToken(principal, null, authorities));
+            verified = tokenVerifier.verify(token);
         } catch (Exception e) {
             log.debug("Firebase token verification failed: {}", e.getMessage());
             SecurityContextHolder.clearContext();
+            return;
         }
+        Optional<User> dbUser = userRepository.findByFirebaseUid(verified.uid());
+        Long userId = dbUser.map(User::getId).orElse(null);
+        Set<Role> roles = dbUser.map(User::getRoles)
+                .filter(r -> !r.isEmpty())
+                .orElse(Set.of(Role.MOTHER));
+
+        FirebaseUserPrincipal principal = new FirebaseUserPrincipal(
+                userId, verified.uid(), verified.email(), verified.emailVerified(),
+                verified.phone(), verified.phone() != null, roles, verified.name()
+        );
+
+        List<GrantedAuthority> authorities = new ArrayList<>();
+        for (Role role : roles) {
+            authorities.add(new SimpleGrantedAuthority("ROLE_" + role.name()));
+        }
+        if (principal.isVerified()) {
+            authorities.add(new SimpleGrantedAuthority("VERIFIED"));
+        }
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(principal, null, authorities));
     }
 }

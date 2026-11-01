@@ -12,10 +12,12 @@ Every new feature or change gets its own branch, so each one can be tracked from
 | Branch | Purpose |
 |---|---|
 | `main` | Production. Vercel deploys it to the live site. Changes arrive only by pull request from `develop`. |
-| `develop` | Integration. Every feature branch starts from it and merges back into it. |
+| `develop` | Pre-production and integration. Vercel deploys it to the pre-production site. Every feature branch starts from it and merges back into it. |
 | `feature/<short-name>` | One new feature or change, e.g. `feature/careers-hello-mailbox`. |
 | `fix/<short-name>` | A bug fix. |
 | `docs/<short-name>` | Documentation only. |
+
+**Only `develop` and `main` deploy** (owner decision D43). No other branch or pull request does; `vercel.json` enforces this.
 
 **Starting work** — always from the latest `develop` on GitHub, never from a local or older branch:
 

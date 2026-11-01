@@ -8,6 +8,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 public interface BookingRepository extends JpaRepository<Booking, Long> {
+    List<Booking> findByProviderIdAndStatusAndScheduledStartAfter(Long providerId, BookingStatus status, java.time.LocalDateTime after);
     List<Booking> findByUserIdOrderByCreatedAtDesc(Long userId);
     List<Booking> findByProviderIdOrderByCreatedAtDesc(Long providerId);
     List<Booking> findByStatusAndScheduledStartBetween(BookingStatus status, LocalDateTime from, LocalDateTime to);

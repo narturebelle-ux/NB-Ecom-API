@@ -53,6 +53,7 @@ public class SecurityConfig {
                                 "/api/v1/plans/**",
                                 "/api/v1/payments/webhook",
                                 "/api/v1/providers/**",
+                                "/api/v1/public/**",
                                 "/swagger-ui.html",
                                 "/swagger-ui/**",
                                 "/v3/api-docs/**"
@@ -68,6 +69,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/v1/careers/jobs/*/applications", "/api/v1/feedback").permitAll()
                         // Dev-only legacy endpoints (bean only exists outside prod/stage; still explicit here).
                         .requestMatchers("/api/v1/auth/send-otp", "/api/v1/auth/login").permitAll()
+                        // Only these two roles review care professional applications (customer-approved).
+                        // Before the general rule below, which leaves out MEDICAL_REVIEWER and allows other admin roles.
+                        .requestMatchers("/api/v1/admin/provider-applications/**").hasAnyAuthority("ROLE_OPERATIONS_ADMIN", "ROLE_MEDICAL_REVIEWER")
                         // Admin namespace (feature flags, refunds, finance view, ...). Any *_ADMIN role qualifies.
                         .requestMatchers("/api/v1/admin/**").hasAnyAuthority(
                                 "ROLE_CLINIC_ADMIN", "ROLE_HOSPITAL_ADMIN", "ROLE_OPERATIONS_ADMIN",
