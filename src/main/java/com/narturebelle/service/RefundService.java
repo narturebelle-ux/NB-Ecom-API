@@ -6,6 +6,7 @@ import com.narturebelle.model.Order;
 import com.narturebelle.model.OrderStatus;
 import com.narturebelle.model.Refund;
 import com.narturebelle.repository.OrderRepository;
+import com.narturebelle.repository.PaidOrderRepository;
 import com.narturebelle.repository.RefundRepository;
 import com.narturebelle.security.AuditService;
 import org.springframework.stereotype.Component;
@@ -25,11 +26,14 @@ public class RefundService {
     private final OrderRepository orderRepository;
     private final RefundRepository refundRepository;
     private final AuditService auditService;
+    private final PaidOrderRepository paidOrderRepository;
 
-    public RefundService(OrderRepository orderRepository, RefundRepository refundRepository, AuditService auditService) {
+    public RefundService(OrderRepository orderRepository, RefundRepository refundRepository, AuditService auditService,
+                          PaidOrderRepository paidOrderRepository) {
         this.orderRepository = orderRepository;
         this.refundRepository = refundRepository;
         this.auditService = auditService;
+        this.paidOrderRepository = paidOrderRepository;
     }
 
     public Refund createRefund(Order order, CreateRefundRequest req, Long adminUserId) {
@@ -58,6 +62,7 @@ public class RefundService {
                 ? OrderStatus.REFUNDED
                 : OrderStatus.PARTIALLY_REFUNDED);
         orderRepository.save(order);
+        paidOrderRepository.markRefunded(order.getId(), order.getUserId());
 
         auditService.record("REFUND_RECORDED", "Order", String.valueOf(order.getId()), req.getReason(),
                 Map.of("amount", req.getAmount().toString(), "newOrderStatus", order.getStatus().name()));

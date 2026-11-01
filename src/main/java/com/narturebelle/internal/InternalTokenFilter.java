@@ -27,7 +27,10 @@ public class InternalTokenFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        return !request.getRequestURI().startsWith("/internal/");
+        // The decoded path Spring routes on. getRequestURI() is raw, so /%69nternal/... would slip past this check.
+        String pathInfo = request.getPathInfo();
+        String path = request.getServletPath() + (pathInfo == null ? "" : pathInfo);
+        return !path.startsWith("/internal/");
     }
 
     @Override

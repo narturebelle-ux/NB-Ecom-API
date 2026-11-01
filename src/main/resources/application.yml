@@ -88,6 +88,10 @@ records:
 mails:
   base-url: ${MAILS_API_URL:http://localhost:8082}
 
+# NB-Ecom-Payments-API. While unset, money questions are answered from this API's own tables; set it at cut-over.
+money:
+  base-url: ${MONEY_API_URL:}
+
 # The private token shared with the other NartureBelle services. Empty means every /internal call is refused.
 internal:
   api-token: ${INTERNAL_API_TOKEN:}

@@ -9,7 +9,7 @@ import com.narturebelle.model.Child;
 import com.narturebelle.model.DeletionRequestStatus;
 import com.narturebelle.model.HealthRecord;
 import com.narturebelle.model.Journey;
-import com.narturebelle.model.Order;
+import com.narturebelle.money.MoneyGateway;
 import com.narturebelle.model.RecordStatus;
 import com.narturebelle.model.User;
 import com.narturebelle.repository.*;
@@ -39,8 +39,7 @@ public class AccountDataService {
     private final OnboardingCallbackRequestRepository onboardingCallbackRequestRepository;
     private final OnboardingDocumentSignatureRepository onboardingDocumentSignatureRepository;
     private final OnboardingCompletionRepository onboardingCompletionRepository;
-    private final OrderRepository orderRepository;
-    private final PaymentRepository paymentRepository;
+    private final MoneyGateway moneyGateway;
     private final EntitlementRepository entitlementRepository;
     private final BookingRepository bookingRepository;
     private final HealthRecordRepository healthRecordRepository;
@@ -64,8 +63,7 @@ public class AccountDataService {
                               OnboardingCallbackRequestRepository onboardingCallbackRequestRepository,
                               OnboardingDocumentSignatureRepository onboardingDocumentSignatureRepository,
                               OnboardingCompletionRepository onboardingCompletionRepository,
-                              OrderRepository orderRepository,
-                              PaymentRepository paymentRepository,
+                              MoneyGateway moneyGateway,
                               EntitlementRepository entitlementRepository,
                               BookingRepository bookingRepository,
                               HealthRecordRepository healthRecordRepository,
@@ -88,8 +86,7 @@ public class AccountDataService {
         this.onboardingCallbackRequestRepository = onboardingCallbackRequestRepository;
         this.onboardingDocumentSignatureRepository = onboardingDocumentSignatureRepository;
         this.onboardingCompletionRepository = onboardingCompletionRepository;
-        this.orderRepository = orderRepository;
-        this.paymentRepository = paymentRepository;
+        this.moneyGateway = moneyGateway;
         this.entitlementRepository = entitlementRepository;
         this.bookingRepository = bookingRepository;
         this.healthRecordRepository = healthRecordRepository;
@@ -130,7 +127,6 @@ public class AccountDataService {
         profile.put("createdAt", user.getCreatedAt());
 
         List<Journey> journeys = journeyRepository.findByUserIdOrderByStartedAtDesc(userId);
-        List<Order> orders = orderRepository.findByUserIdOrderByCreatedAtDesc(userId);
         List<HealthRecord> records = healthRecordRepository.findByUserIdAndStatusNotOrderByCreatedAtDesc(userId, RecordStatus.DELETED);
         List<Child> children = childRepository.findByUserIdOrderByDateOfBirthAsc(userId);
 
@@ -147,9 +143,7 @@ public class AccountDataService {
         export.put("onboardingCallbackRequests", onboardingCallbackRequestRepository.findByUserIdOrderByCreatedAtDesc(userId));
         export.put("onboardingDocumentSignatures", onboardingDocumentSignatureRepository.findByUserId(userId));
         export.put("onboardingCompletion", onboardingCompletionRepository.findByUserId(userId).orElse(null));
-        export.put("orders", orders);
-        export.put("payments", orders.stream()
-                .flatMap(o -> paymentRepository.findByOrderIdOrderByCreatedAtDesc(o.getId()).stream()).toList());
+        export.putAll(moneyGateway.moneyExport(userId));
         export.put("entitlements", entitlementRepository.findByUserIdOrderByCreatedAtDesc(userId));
         export.put("bookings", bookingRepository.findByUserIdOrderByCreatedAtDesc(userId));
         export.put("healthRecords", records);

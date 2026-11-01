@@ -32,6 +32,10 @@ public class Entitlement {
     @Column(nullable = false)
     private LocalDateTime expiresAt;
 
+    /** Copied here so the wallet can show it without reading orders or plans. Set from V33 on. */
+    @Enumerated(EnumType.STRING)
+    private PlanCode planCode;
+
     @Column(nullable = false)
     private LocalDateTime createdAt;
 
@@ -64,6 +68,9 @@ public class Entitlement {
 
     public LocalDateTime getExpiresAt() { return expiresAt; }
     public void setExpiresAt(LocalDateTime expiresAt) { this.expiresAt = expiresAt; }
+
+    public PlanCode getPlanCode() { return planCode; }
+    public void setPlanCode(PlanCode planCode) { this.planCode = planCode; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }

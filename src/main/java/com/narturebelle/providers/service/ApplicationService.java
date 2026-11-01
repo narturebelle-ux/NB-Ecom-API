@@ -21,7 +21,7 @@ import com.narturebelle.providers.repository.ProviderApplicationRepository;
 import com.narturebelle.providers.repository.RequestedChangeRepository;
 import com.narturebelle.repository.OnboardingIntakeRepository;
 import com.narturebelle.repository.JourneyRepository;
-import com.narturebelle.repository.OrderRepository;
+import com.narturebelle.money.MoneyGateway;
 import com.narturebelle.repository.ProviderRepository;
 import com.narturebelle.security.AuditService;
 import com.narturebelle.security.AuthorizationService;
@@ -58,7 +58,7 @@ public class ApplicationService {
     private final ApplicationFormCatalog catalog;
     private final AgreementCatalog agreementCatalog;
     private final JourneyRepository journeyRepository;
-    private final OrderRepository orderRepository;
+    private final MoneyGateway moneyGateway;
     private final OnboardingIntakeRepository intakeRepository;
     private final ProviderRepository providerRepository;
     private final AuthorizationService authorizationService;
@@ -69,7 +69,7 @@ public class ApplicationService {
     public ApplicationService(ProviderApplicationRepository applicationRepository, RequestedChangeRepository requestedChangeRepository,
                               ApplicationAnswerStore answerStore, ApplicationDocumentService documentService,
                               ApplicationFormCatalog catalog, AgreementCatalog agreementCatalog,
-                              JourneyRepository journeyRepository, OrderRepository orderRepository,
+                              JourneyRepository journeyRepository, MoneyGateway moneyGateway,
                               OnboardingIntakeRepository intakeRepository, ProviderRepository providerRepository,
                               AuthorizationService authorizationService, AuditService auditService, ApplicationNotifier notifier,
                               @Value("${onboarding.require-phone-verification}") boolean requirePhone) {
@@ -80,7 +80,7 @@ public class ApplicationService {
         this.catalog = catalog;
         this.agreementCatalog = agreementCatalog;
         this.journeyRepository = journeyRepository;
-        this.orderRepository = orderRepository;
+        this.moneyGateway = moneyGateway;
         this.intakeRepository = intakeRepository;
         this.providerRepository = providerRepository;
         this.authorizationService = authorizationService;
@@ -311,7 +311,7 @@ public class ApplicationService {
     }
 
     private boolean isMotherAccount(Long userId) {
-        return journeyRepository.existsByUserId(userId) || orderRepository.existsByUserId(userId) || intakeRepository.existsByUserId(userId);
+        return journeyRepository.existsByUserId(userId) || moneyGateway.hasAnyOrder(userId) || intakeRepository.existsByUserId(userId);
     }
 
     private boolean isContactVerified(FirebaseUserPrincipal principal) {

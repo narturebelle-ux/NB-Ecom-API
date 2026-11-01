@@ -14,9 +14,9 @@ public interface IdeaVoteRepository extends JpaRepository<IdeaVote, Long> {
 
     List<IdeaVote> findByUserIdAndIdeaIdIn(Long userId, Collection<Long> ideaIds);
 
-    /** [ideaId, all votes, paid votes] for the given ideas. A vote is "paid" while the voter has any PAID order. */
+    /** [ideaId, all votes, paid votes] for the given ideas. A vote is "paid" while the voter has an unrefunded real purchase (paid_orders). */
     @Query(value = "select v.idea_id, count(*), "
-            + "sum(case when exists (select 1 from orders o where o.user_id = v.user_id and o.status = 'PAID') then 1 else 0 end) "
+            + "sum(case when exists (select 1 from paid_orders o where o.user_id = v.user_id and o.refunded = false) then 1 else 0 end) "
             + "from idea_votes v where v.idea_id in (:ideaIds) group by v.idea_id", nativeQuery = true)
     List<Object[]> countVotes(Collection<Long> ideaIds);
 }

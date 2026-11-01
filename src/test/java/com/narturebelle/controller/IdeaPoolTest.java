@@ -41,6 +41,7 @@ class IdeaPoolTest {
     @Autowired private UserRepository userRepository;
     @Autowired private ConsentRepository consentRepository;
     @Autowired private OrderRepository orderRepository;
+    @Autowired private com.narturebelle.repository.PaidOrderRepository paidOrderRepository;
     @Autowired private IdeaRepository ideaRepository;
     @Autowired private IdeaVoteRepository ideaVoteRepository;
     @Autowired private FeatureFlagRepository featureFlagRepository;
@@ -52,6 +53,7 @@ class IdeaPoolTest {
     void setUp() throws Exception {
         ideaVoteRepository.deleteAll();
         ideaRepository.deleteAll();
+        paidOrderRepository.deleteAll();
         orderRepository.deleteAll();
         consentRepository.deleteAll();
         userRepository.deleteAll();
@@ -107,7 +109,7 @@ class IdeaPoolTest {
             order.setPrice(new BigDecimal("9999"));
             order.setCreatedAt(LocalDateTime.now());
             order.setUpdatedAt(LocalDateTime.now());
-            orderRepository.save(order);
+            paidOrderRepository.save(new com.narturebelle.model.PaidOrder(orderRepository.save(order).getId(), id));
         }
         when(firebaseTokenVerifier.verify("tok-" + name))
                 .thenReturn(new VerifiedFirebaseToken("uid-idea-" + name, name + "@example.com", true, null, null));

@@ -4,6 +4,7 @@ import com.narturebelle.exception.InvalidWebhookSignatureException;
 import com.narturebelle.exception.PaymentNotAllowedException;
 import com.narturebelle.exception.PaymentNotFoundException;
 import com.narturebelle.model.Order;
+import com.narturebelle.model.PaidOrder;
 import com.narturebelle.model.OrderStatus;
 import com.narturebelle.model.Payment;
 import com.narturebelle.model.PaymentProviderType;
@@ -14,6 +15,7 @@ import com.narturebelle.payment.CheckoutSession;
 import com.narturebelle.payment.PaymentProvider;
 import com.narturebelle.payment.WebhookEventPayload;
 import com.narturebelle.repository.OrderRepository;
+import com.narturebelle.repository.PaidOrderRepository;
 import com.narturebelle.repository.PaymentRepository;
 import com.narturebelle.repository.PaymentWebhookEventRepository;
 import com.narturebelle.security.AuditService;
@@ -37,11 +39,12 @@ public class PaymentService {
     private final EntitlementService entitlementService;
     private final AuditService auditService;
     private final ReferralService referralService;
+    private final PaidOrderRepository paidOrderRepository;
 
     public PaymentService(PaymentRepository paymentRepository, PaymentWebhookEventRepository paymentWebhookEventRepository,
                            OrderRepository orderRepository, PaymentProvider paymentProvider,
                            EntitlementService entitlementService, AuditService auditService,
-                           ReferralService referralService) {
+                           ReferralService referralService, PaidOrderRepository paidOrderRepository) {
         this.paymentRepository = paymentRepository;
         this.paymentWebhookEventRepository = paymentWebhookEventRepository;
         this.orderRepository = orderRepository;
@@ -49,6 +52,7 @@ public class PaymentService {
         this.entitlementService = entitlementService;
         this.auditService = auditService;
         this.referralService = referralService;
+        this.paidOrderRepository = paidOrderRepository;
     }
 
     public Payment createPayment(Order order) {
@@ -124,6 +128,9 @@ public class PaymentService {
         if (order.getStatus() == OrderStatus.PENDING) {
             order.setStatus(OrderStatus.PAID);
             orderRepository.save(order);
+            if (order.getPrice().signum() > 0) {
+                paidOrderRepository.save(new PaidOrder(order.getId(), order.getUserId()));
+            }
             auditService.record("ORDER_PAID", "Order", String.valueOf(order.getId()), null);
             // Referral credit runs after this webhook commits, in its own transaction: a referral problem
             // must never roll back a payment.

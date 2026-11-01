@@ -82,6 +82,13 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(body);
     }
 
+    @ExceptionHandler(com.narturebelle.money.MoneyUnavailableException.class)
+    public ResponseEntity<Map<String, String>> handleMoneyUnavailable(com.narturebelle.money.MoneyUnavailableException e) {
+        log.error("NB-Ecom-Payments-API unavailable", e);
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(Map.of("code", "SERVICE_UNAVAILABLE", "message", "Please try again shortly."));
+    }
+
     @ExceptionHandler(PlanNotFoundException.class)
     public ResponseEntity<Map<String, String>> handlePlanNotFound(PlanNotFoundException e) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)

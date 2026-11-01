@@ -5,7 +5,9 @@ import com.narturebelle.model.Entitlement;
 import com.narturebelle.model.Order;
 import com.narturebelle.model.PlanEntitlement;
 import com.narturebelle.model.PlanVersion;
+import com.narturebelle.model.PlanCode;
 import com.narturebelle.model.Role;
+import com.narturebelle.money.MoneyGateway.SessionGrant;
 import com.narturebelle.repository.EntitlementRepository;
 import com.narturebelle.repository.PlanVersionRepository;
 import com.narturebelle.security.AuditService;
@@ -53,6 +55,7 @@ public class EntitlementService {
             entitlement.setTotalSessions(PlanPricing.prorateSessions(allocation.getSessionCount(), order.effectiveMonths()));
             entitlement.setUsedSessions(0);
             entitlement.setExpiresAt(expiresAt);
+            entitlement.setPlanCode(planService.resolvePlanCode(planVersion.getId()).orElse(null));
             try {
                 entitlementRepository.save(entitlement);
             } catch (DataIntegrityViolationException alreadyGranted) {
@@ -62,6 +65,30 @@ public class EntitlementService {
 
         auditService.record("ENTITLEMENTS_GRANTED", "Order", String.valueOf(order.getId()), null,
                 Map.of("planVersionId", planVersion.getId(), "allocationCount", allocations.size()));
+    }
+
+    /**
+     * Grants from what the Money API reports, using its expiry so both sides share one value however late this runs.
+     * Checks first and treats a repeat as done: a unique-key failure can't be caught and continued inside a Postgres
+     * transaction, so a true race rolls back and the event's next delivery finds the sessions already there.
+     */
+    public void grant(Long orderId, Long userId, PlanCode planCode, LocalDateTime expiresAt, List<SessionGrant> sessions) {
+        if (sessions.isEmpty() || entitlementRepository.existsByOrderId(orderId)) {
+            return;
+        }
+        for (SessionGrant session : sessions) {
+            Entitlement entitlement = new Entitlement();
+            entitlement.setUserId(userId);
+            entitlement.setOrderId(orderId);
+            entitlement.setProfessionalType(session.professionalType());
+            entitlement.setTotalSessions(session.sessionCount());
+            entitlement.setUsedSessions(0);
+            entitlement.setExpiresAt(expiresAt);
+            entitlement.setPlanCode(planCode);
+            entitlementRepository.save(entitlement);
+        }
+        auditService.record("ENTITLEMENTS_GRANTED", "Order", String.valueOf(orderId), null,
+                Map.of("planCode", String.valueOf(planCode), "allocationCount", sessions.size()));
     }
 
     public List<Entitlement> walletForUser(Long userId) {

@@ -18,7 +18,6 @@ import com.narturebelle.model.OnboardingCompletion;
 import com.narturebelle.model.OnboardingDocument;
 import com.narturebelle.model.OnboardingDocumentSignature;
 import com.narturebelle.model.OnboardingIntake;
-import com.narturebelle.model.OrderStatus;
 import com.narturebelle.model.SlotStatus;
 import com.narturebelle.model.User;
 import com.narturebelle.repository.CoordinatorRepository;
@@ -29,7 +28,7 @@ import com.narturebelle.repository.OnboardingCompletionRepository;
 import com.narturebelle.repository.OnboardingDocumentRepository;
 import com.narturebelle.repository.OnboardingDocumentSignatureRepository;
 import com.narturebelle.repository.OnboardingIntakeRepository;
-import com.narturebelle.repository.OrderRepository;
+import com.narturebelle.money.MoneyGateway;
 import com.narturebelle.repository.UserRepository;
 import com.narturebelle.security.AuditService;
 import org.springframework.stereotype.Service;
@@ -50,7 +49,7 @@ public class OnboardingService {
     private final OnboardingDocumentRepository onboardingDocumentRepository;
     private final OnboardingDocumentSignatureRepository onboardingDocumentSignatureRepository;
     private final OnboardingCompletionRepository onboardingCompletionRepository;
-    private final OrderRepository orderRepository;
+    private final MoneyGateway moneyGateway;
     private final UserRepository userRepository;
     private final com.narturebelle.mail.MailQueue mailQueue;
     private final AuditService auditService;
@@ -64,7 +63,7 @@ public class OnboardingService {
                               OnboardingDocumentRepository onboardingDocumentRepository,
                               OnboardingDocumentSignatureRepository onboardingDocumentSignatureRepository,
                               OnboardingCompletionRepository onboardingCompletionRepository,
-                              OrderRepository orderRepository,
+                              MoneyGateway moneyGateway,
                               UserRepository userRepository,
                               com.narturebelle.mail.MailQueue mailQueue,
                               AuditService auditService,
@@ -77,7 +76,7 @@ public class OnboardingService {
         this.onboardingDocumentRepository = onboardingDocumentRepository;
         this.onboardingDocumentSignatureRepository = onboardingDocumentSignatureRepository;
         this.onboardingCompletionRepository = onboardingCompletionRepository;
-        this.orderRepository = orderRepository;
+        this.moneyGateway = moneyGateway;
         this.userRepository = userRepository;
         this.mailQueue = mailQueue;
         this.auditService = auditService;
@@ -297,7 +296,7 @@ public class OnboardingService {
         if (!hasCall && !hasCallbackRequest) {
             missing.add("onboarding call");
         }
-        if (!orderRepository.existsByUserIdAndStatus(userId, OrderStatus.PAID)) {
+        if (!moneyGateway.hasPaidOrder(userId)) {
             missing.add("payment");
         }
         if (!allActiveDocumentsSigned(userId)) {

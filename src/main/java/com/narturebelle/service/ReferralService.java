@@ -3,6 +3,7 @@ package com.narturebelle.service;
 import com.narturebelle.mail.MailQueue;
 import com.narturebelle.exception.ReferralException;
 import com.narturebelle.model.*;
+import com.narturebelle.money.MoneyGateway;
 import com.narturebelle.repository.*;
 import com.narturebelle.security.AuditService;
 import org.slf4j.Logger;
@@ -38,9 +39,7 @@ public class ReferralService {
     private final ReferralCodeRepository referralCodeRepository;
     private final ReferralRepository referralRepository;
     private final ReferralRewardRepository referralRewardRepository;
-    private final OrderRepository orderRepository;
-    private final PlanRepository planRepository;
-    private final PlanVersionRepository planVersionRepository;
+    private final MoneyGateway moneyGateway;
     private final EntitlementService entitlementService;
     private final UserRepository userRepository;
     private final MailQueue mailQueue;
@@ -48,17 +47,14 @@ public class ReferralService {
     private final TransactionTemplate requiresNew;
 
     public ReferralService(ReferralCodeRepository referralCodeRepository, ReferralRepository referralRepository,
-                           ReferralRewardRepository referralRewardRepository, OrderRepository orderRepository,
-                           PlanRepository planRepository, PlanVersionRepository planVersionRepository,
+                           ReferralRewardRepository referralRewardRepository, MoneyGateway moneyGateway,
                            EntitlementService entitlementService, UserRepository userRepository,
                            MailQueue mailQueue, AuditService auditService,
                            PlatformTransactionManager transactionManager) {
         this.referralCodeRepository = referralCodeRepository;
         this.referralRepository = referralRepository;
         this.referralRewardRepository = referralRewardRepository;
-        this.orderRepository = orderRepository;
-        this.planRepository = planRepository;
-        this.planVersionRepository = planVersionRepository;
+        this.moneyGateway = moneyGateway;
         this.entitlementService = entitlementService;
         this.userRepository = userRepository;
         this.mailQueue = mailQueue;
@@ -121,52 +117,52 @@ public class ReferralService {
      * the referrer gets her free Premium plan. Idempotent: replays and the reward order itself (price 0) are no-ops.
      */
     public void onOrderPaid(Order order) {
-        if (order.getPrice() == null || order.getPrice().signum() <= 0) return;
         try {
-            requiresNew.executeWithoutResult(status -> creditReferral(order));
+            onPaid(order.getId(), order.getUserId(), order.getPrice());
         } catch (Exception e) {
             log.warn("Referral credit failed for order {}: {}", order.getId(), e.getMessage());
-            return;
         }
     }
 
-    /** Grants and emails the free Premium plan if this payment earned it, all in one transaction. */
-    private void creditReferral(Order order) {
-        Referral referral = referralRepository.findByReferredUserId(order.getUserId()).orElse(null);
-        if (referral == null || referral.getQualifiedAt() != null) return;
-        referral.setQualifiedAt(LocalDateTime.now());
-        referralRepository.save(referral);
-        auditService.record("REFERRAL_QUALIFIED", "USER", String.valueOf(referral.getReferrerUserId()), "A referred friend bought a plan");
-
-        Long referrer = referral.getReferrerUserId();
-        if (referralRepository.countByReferrerUserIdAndQualifiedAtIsNotNull(referrer) >= TARGET
+    /**
+     * For callers that can retry: throws if the reward couldn't be finished. A repeat skips what's done and picks up
+     * the reward, because the check below doesn't depend on this call being the one that qualified the friend.
+     */
+    public void onPaid(Long orderId, Long userId, BigDecimal price) {
+        if (price == null || price.signum() <= 0) return;
+        Long referrer = requiresNew.execute(status -> qualifyReferral(userId));
+        if (referrer != null
+                && referralRepository.countByReferrerUserIdAndQualifiedAtIsNotNull(referrer) >= TARGET
                 && !referralRewardRepository.existsById(referrer)) {
             grantPremium(referrer);
-            emailReward(referrer);
         }
     }
 
-    /** Runs inside creditReferral's transaction: the order, the reward row and the entitlements commit together;
-     * a concurrent grant hits the referral_rewards primary key and the whole transaction rolls back. */
-    private void grantPremium(Long userId) {
-        Plan premium = planRepository.findByCode(PlanCode.PREMIUM)
-                .orElseThrow(() -> new IllegalStateException("No PREMIUM plan to grant as a referral reward"));
-        PlanVersion version = planVersionRepository.findByPlanIdAndActiveTrue(premium.getId())
-                .orElseThrow(() -> new IllegalStateException("PREMIUM plan has no active version"));
+    /** The referrer of this buyer, or null if she wasn't referred. */
+    private Long qualifyReferral(Long buyerUserId) {
+        Referral referral = referralRepository.findByReferredUserId(buyerUserId).orElse(null);
+        if (referral == null) return null;
+        if (referral.getQualifiedAt() == null) {
+            referral.setQualifiedAt(LocalDateTime.now());
+            referralRepository.save(referral);
+            auditService.record("REFERRAL_QUALIFIED", "USER", String.valueOf(referral.getReferrerUserId()), "A referred friend bought a plan");
+        }
+        return referral.getReferrerUserId();
+    }
 
-        Order order = new Order();
-        order.setUserId(userId);
-        order.setPlanVersionId(version.getId());
-        order.setIdempotencyKey("referral-reward-" + userId);
-        order.setRequestFingerprint("referral-reward");
-        order.setStatus(OrderStatus.PAID);
-        order.setPaymentMode(PaymentMode.ONE_TIME);
-        order.setPrice(BigDecimal.ZERO);
-        order.setMonths(9); // the full plan, not priced from a due date
-        Order saved = orderRepository.save(order);
-        referralRewardRepository.saveAndFlush(new ReferralReward(userId, saved.getId()));
-        entitlementService.grantForOrder(saved);
-        auditService.record("REFERRAL_REWARD_GRANTED", "Order", String.valueOf(saved.getId()), "Free Premium plan for 5 referrals");
+    /**
+     * Asks for the order with no transaction open, so a slow Money API holds no database connection. The key is the
+     * order's idempotency key, so a repeat can't create a second free order. The reward row, the sessions and the email
+     * then commit together; a concurrent grant hits the referral_rewards primary key and that transaction rolls back.
+     */
+    private void grantPremium(Long userId) {
+        MoneyGateway.RewardOrder reward = moneyGateway.grantReward("referral-reward-" + userId, userId, PlanCode.PREMIUM);
+        requiresNew.executeWithoutResult(status -> {
+            referralRewardRepository.saveAndFlush(new ReferralReward(userId, reward.orderId()));
+            entitlementService.grant(reward.orderId(), userId, reward.planCode(), reward.expiresAt(), reward.sessions());
+            auditService.record("REFERRAL_REWARD_GRANTED", "Order", String.valueOf(reward.orderId()), "Free Premium plan for 5 referrals");
+            emailReward(userId);
+        });
     }
 
     private void emailReward(Long userId) {
@@ -177,7 +173,7 @@ public class ReferralService {
     }
 
     private boolean purchased(Long userId) {
-        return orderRepository.existsByUserIdAndStatusAndPriceGreaterThan(userId, OrderStatus.PAID, BigDecimal.ZERO);
+        return moneyGateway.hasPaidOrderAboveZero(userId);
     }
 
     private String codeFor(Long userId) {
