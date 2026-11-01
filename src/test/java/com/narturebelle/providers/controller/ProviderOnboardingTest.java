@@ -15,6 +15,7 @@ import com.narturebelle.model.Booking;
 import com.narturebelle.model.Journey;
 import com.narturebelle.model.PayoutRate;
 import com.narturebelle.model.Provider;
+import com.narturebelle.model.SessionFeedback;
 import com.narturebelle.model.ProviderSlot;
 import com.narturebelle.model.User;
 import com.narturebelle.providers.repository.*;
@@ -87,6 +88,7 @@ class ProviderOnboardingTest {
     @Autowired private AuditService auditService;
     @Autowired private TransactionTemplate transactionTemplate;
     @Autowired private AuditEventRepository auditRepository;
+    @Autowired private SessionFeedbackRepository feedbackRepository;
 
     @MockBean private FirebaseTokenVerifier firebaseTokenVerifier;
     @MockBean private EmailSender emailSender;
@@ -319,6 +321,36 @@ class ProviderOnboardingTest {
     // ---- approval to go-live ----
 
     @Test
+    void aProfessionalSeesFeedbackWithoutTheMothersIdentity() throws Exception {
+        Long id = live();
+        Long providerId = applicationRepository.findById(id).orElseThrow().getProviderId();
+
+        call(get("/api/v1/provider-workspace/feedback"), applicant)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.count").value(0))
+                .andExpect(jsonPath("$.averageRating").doesNotExist());
+
+        addSlot(LocalDateTime.now().plusDays(5), LocalDateTime.now().plusDays(5).plusMinutes(30)).andExpect(status().is2xxSuccessful());
+        Booking booking = booking(providerId);
+        SessionFeedback feedback = new SessionFeedback();
+        feedback.setBookingId(booking.getId());
+        feedback.setUserId(booking.getUserId());
+        feedback.setRating(4);
+        feedback.setComment("Very kind");
+        feedbackRepository.save(feedback);
+
+        String body = call(get("/api/v1/provider-workspace/feedback"), applicant)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.count").value(1))
+                .andExpect(jsonPath("$.averageRating").value(4.0))
+                .andExpect(jsonPath("$.items[0].rating").value(4))
+                .andExpect(jsonPath("$.items[0].comment").value("Very kind"))
+                .andReturn().getResponse().getContentAsString();
+        assertFalse(body.contains("bookingId"));
+        assertFalse(body.contains("userId"));
+    }
+
+    @Test
     void theFullJourneyToGoLive() throws Exception {
         Long id = approved();
 
@@ -343,6 +375,7 @@ class ProviderOnboardingTest {
 
         assertEquals(ProviderStatus.ACTIVE, providerRepository.findById(provider.getId()).orElseThrow().getStatus());
         assertTrue(userRepository.findById(applicantId).orElseThrow().getRoles().contains(Role.GYNECOLOGIST));
+        assertFalse(userRepository.findById(applicantId).orElseThrow().getRoles().contains(Role.MOTHER));
         mockMvc.perform(get("/api/v1/public/providers/" + provider.getId() + "/credentials"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.registrationNumber").exists())

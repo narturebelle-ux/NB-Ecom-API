@@ -784,6 +784,7 @@ Sessions come from `/provider/bookings` , which needs the professional role gran
 | `GET`, `POST /provider-workspace/slots`; `DELETE /provider-workspace/slots/{id}` | Open slots. 409 `SLOT_OVERLAP` |
 | `GET /provider-workspace/earnings` | Fee, total, items. `paidOutTotal` stays 0 until bank payments exist |
 | `GET /provider-workspace/product-activity` | Latest 20 suggestions, without the mother's identity |
+| `GET /provider-workspace/feedback` | `{count, averageRating, items: [{rating, comment, date}]}`. Latest 50, newest first; `averageRating` is null with none. No booking ID, mother's ID or exact time |
 | `GET /provider-workspace/profile` | Everything on file; bank details masked |
 | `GET`, `POST /provider-workspace/change-requests` | `{type: PROFILE, NAME, LICENCE or BANK, values}`. Old details stay until approved |
 | `POST /provider-workspace/change-requests/{id}/document` | Required for `NAME` and `LICENCE`; can be retried. Responses carry `documentRequired` and `documentAttached` |

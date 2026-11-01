@@ -1,7 +1,12 @@
 package com.narturebelle.providers.service;
 
+import com.narturebelle.model.SessionFeedback;
+import com.narturebelle.repository.SessionFeedbackRepository;
+import org.springframework.data.domain.PageRequest;
 import com.narturebelle.providers.dto.WorkspaceDtos.EarningItem;
 import com.narturebelle.providers.dto.WorkspaceDtos.EarningsResponse;
+import com.narturebelle.providers.dto.WorkspaceDtos.FeedbackItem;
+import com.narturebelle.providers.dto.WorkspaceDtos.FeedbackResponse;
 import com.narturebelle.providers.dto.WorkspaceDtos.ProductActivityItem;
 import com.narturebelle.providers.dto.WorkspaceDtos.ProfileResponse;
 import com.narturebelle.providers.dto.WorkspaceDtos.PublicCredentialsResponse;
@@ -47,12 +52,13 @@ public class ProviderWorkspaceService {
     private final PayoutRepository payoutRepository;
     private final SessionProductRecommendationRepository recommendationRepository;
     private final ProductRepository productRepository;
+    private final SessionFeedbackRepository feedbackRepository;
 
     public ProviderWorkspaceService(ApplicationService applicationService, ApplicationSetupService setupService, ApplicationAnswerStore answerStore,
                                     ProviderApplicationRepository applicationRepository, ProviderRepository providerRepository,
                                     ServiceOfferingRepository serviceRepository, ProviderSlotRepository slotRepository,
                                     PayoutRepository payoutRepository, SessionProductRecommendationRepository recommendationRepository,
-                                    ProductRepository productRepository) {
+                                    ProductRepository productRepository, SessionFeedbackRepository feedbackRepository) {
         this.applicationService = applicationService;
         this.setupService = setupService;
         this.answerStore = answerStore;
@@ -63,6 +69,7 @@ public class ProviderWorkspaceService {
         this.payoutRepository = payoutRepository;
         this.recommendationRepository = recommendationRepository;
         this.productRepository = productRepository;
+        this.feedbackRepository = feedbackRepository;
     }
 
     // ---- services ----
@@ -152,6 +159,16 @@ public class ProviderWorkspaceService {
                 .map(payout -> new EarningItem(payout.getBookingId(), payout.getAmount(), payout.getStatus().name(), payout.getCreatedAt())).toList();
         return new EarningsResponse(setupService.feeFor(application.getProfessionalType()), total, BigDecimal.ZERO, payouts.size(),
                 AgreementCatalog.IS_DRAFT, items);
+    }
+
+    /** The latest 50, without anything identifying the mother. */
+    public FeedbackResponse feedback() {
+        List<SessionFeedback> feedback = feedbackRepository.findForProvider(requireApproved().getProviderId(), PageRequest.of(0, 50));
+        Double average = feedback.isEmpty() ? null
+                : feedback.stream().mapToInt(SessionFeedback::getRating).average().orElse(0);
+        return new FeedbackResponse(feedback.size(), average, feedback.stream()
+                .map(item -> new FeedbackItem(item.getRating(), item.getComment(), item.getCreatedAt().toLocalDate()))
+                .toList());
     }
 
     public List<ProductActivityItem> productActivity() {

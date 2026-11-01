@@ -56,6 +56,11 @@ public final class WorkspaceDtos {
     public record EarningsResponse(BigDecimal feePerSession, BigDecimal totalEarned, BigDecimal paidOutTotal, int completedSessions,
                                    boolean feeIsDraft, List<EarningItem> items) {}
 
+    /** Deliberately no booking ID, mother's ID or exact time, so feedback can't be traced back to a mother. */
+    public record FeedbackItem(Integer rating, String comment, java.time.LocalDate date) {}
+
+    public record FeedbackResponse(int count, Double averageRating, List<FeedbackItem> items) {}
+
     public record ProductActivityItem(String productName, String priority, String note, LocalDateTime createdAt) {}
 
     public record ProfileResponse(Long providerId, Role profession, ProviderStatus providerStatus, String legalName, String displayName,
