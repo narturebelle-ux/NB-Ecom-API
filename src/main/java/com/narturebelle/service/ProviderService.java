@@ -61,16 +61,18 @@ public class ProviderService {
     private final ProviderSlotRepository providerSlotRepository;
     private final UserRepository userRepository;
     private final AuditService auditService;
+    private final ProviderOnboardingGuard onboardingGuard;
 
     public ProviderService(ProviderRepository providerRepository, ProviderCredentialRepository providerCredentialRepository,
                             ServiceOfferingRepository serviceOfferingRepository, ProviderSlotRepository providerSlotRepository,
-                            UserRepository userRepository, AuditService auditService) {
+                            UserRepository userRepository, AuditService auditService, ProviderOnboardingGuard onboardingGuard) {
         this.providerRepository = providerRepository;
         this.providerCredentialRepository = providerCredentialRepository;
         this.serviceOfferingRepository = serviceOfferingRepository;
         this.providerSlotRepository = providerSlotRepository;
         this.userRepository = userRepository;
         this.auditService = auditService;
+        this.onboardingGuard = onboardingGuard;
     }
 
     public Provider createProvider(CreateProviderRequest req) {
@@ -98,6 +100,7 @@ public class ProviderService {
     /** Requires current status UNDER_REVIEW. Grants the professional Role onto the linked User if not already present. */
     public Provider verify(Long providerId, String reason) {
         Provider provider = findOrThrow(providerId);
+        requireNotManagedByOnboarding(provider);
         if (provider.getStatus() != ProviderStatus.UNDER_REVIEW) {
             throw new InvalidProviderStatusTransitionException(
                     "Provider must be UNDER_REVIEW to verify; current status is " + provider.getStatus());
@@ -113,6 +116,7 @@ public class ProviderService {
 
     public Provider updateStatus(Long providerId, ProviderStatus newStatus, String reason) {
         Provider provider = findOrThrow(providerId);
+        requireNotManagedByOnboarding(provider);
         ProviderStatus current = provider.getStatus();
         Set<ProviderStatus> allowed = ALLOWED_TRANSITIONS.getOrDefault(current, Set.of());
         if (newStatus == ProviderStatus.VERIFIED || !allowed.contains(newStatus)) {
@@ -127,6 +131,14 @@ public class ProviderService {
                 Map.of("from", current.name(), "to", newStatus.name()));
 
         return saved;
+    }
+
+    /** Its status belongs to the application: changing it here would skip setup, bank checks, the agreement or a licence lapse. */
+    private void requireNotManagedByOnboarding(Provider provider) {
+        if (onboardingGuard.managedByOnboarding(provider.getId())) {
+            throw new InvalidProviderStatusTransitionException(
+                    "This provider joined through a professional application. Change their status in application review.");
+        }
     }
 
     private void grantProfessionalRoleIfAbsent(Provider provider) {

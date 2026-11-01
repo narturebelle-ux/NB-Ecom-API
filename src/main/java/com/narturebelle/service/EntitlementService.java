@@ -1,11 +1,13 @@
 package com.narturebelle.service;
 
 import com.narturebelle.exception.NoEntitlementAvailableException;
+import com.narturebelle.model.BookingStatus;
 import com.narturebelle.model.Entitlement;
 import com.narturebelle.model.Order;
 import com.narturebelle.model.PlanEntitlement;
 import com.narturebelle.model.PlanVersion;
 import com.narturebelle.model.Role;
+import com.narturebelle.repository.BookingRepository;
 import com.narturebelle.repository.EntitlementRepository;
 import com.narturebelle.repository.PlanVersionRepository;
 import com.narturebelle.security.AuditService;
@@ -22,13 +24,16 @@ public class EntitlementService {
 
     private final EntitlementRepository entitlementRepository;
     private final PlanVersionRepository planVersionRepository;
+    private final BookingRepository bookingRepository;
     private final PlanService planService;
     private final AuditService auditService;
 
     public EntitlementService(EntitlementRepository entitlementRepository, PlanVersionRepository planVersionRepository,
-                               PlanService planService, AuditService auditService) {
+                               PlanService planService, AuditService auditService,
+                               BookingRepository bookingRepository) {
         this.entitlementRepository = entitlementRepository;
         this.planVersionRepository = planVersionRepository;
+        this.bookingRepository = bookingRepository;
         this.planService = planService;
         this.auditService = auditService;
     }
@@ -68,8 +73,19 @@ public class EntitlementService {
         return entitlementRepository.findByUserIdOrderByCreatedAtDesc(userId);
     }
 
-    public boolean hasAvailableSession(Long userId, Role professionalType) {
-        return entitlementRepository.existsConsumable(userId, professionalType, LocalDateTime.now());
+    /**
+     * True when she has a session not already held by another booking: sessions are only deducted at completion, so
+     * without this she could book more than she can complete, leaving the provider unable to close or be paid for them.
+     * Locks her entitlement rows so two bookings at once can't both take the last session. Call inside a transaction.
+     */
+    @Transactional
+    public boolean hasUnreservedSession(Long userId, Role professionalType) {
+        int remaining = entitlementRepository.findConsumableForUpdate(userId, professionalType, LocalDateTime.now()).stream()
+                .mapToInt(entitlement -> entitlement.getTotalSessions() - entitlement.getUsedSessions())
+                .sum();
+        long held = bookingRepository.countByUserIdAndProfessionalTypeAndStatusIn(userId, professionalType,
+                List.of(BookingStatus.BOOKED, BookingStatus.IN_PROGRESS));
+        return remaining > held;
     }
 
     /**

@@ -77,13 +77,14 @@ public class BookingService {
                 .orElseThrow(() -> new ServiceOfferingNotFoundException(
                         "No active service offering " + req.getServiceOfferingId() + " for provider " + provider.getId()));
 
-        if (!entitlementService.hasAvailableSession(userId, provider.getProfessionalType())) {
+        if (!entitlementService.hasUnreservedSession(userId, provider.getProfessionalType())) {
             throw new NoEntitlementAvailableException(
                     "No available " + provider.getProfessionalType() + " session for user " + userId);
         }
 
         ProviderSlot slot = providerSlotRepository.findById(req.getSlotId())
                 .orElseThrow(() -> new SlotNotAvailableException("No such slot: " + req.getSlotId()));
+        requireClaimable(slot, provider.getId());
         if (providerSlotRepository.claimSlot(slot.getId()) == 0) {
             throw new SlotNotAvailableException("Slot " + slot.getId() + " is no longer available.");
         }
@@ -109,6 +110,13 @@ public class BookingService {
                 Map.of("providerId", provider.getId(), "slotId", slot.getId()));
 
         return saved;
+    }
+
+    /** The slot must be this provider's own and still ahead: otherwise a booking could take another provider's time. */
+    private static void requireClaimable(ProviderSlot slot, Long providerId) {
+        if (!slot.getProviderId().equals(providerId) || !slot.getStartAt().isAfter(LocalDateTime.now())) {
+            throw new SlotNotAvailableException("Slot " + slot.getId() + " is no longer available.");
+        }
     }
 
     public List<Booking> listForUser(Long userId) {
@@ -141,8 +149,15 @@ public class BookingService {
     public Booking rescheduleBooking(Booking booking, Long actorUserId, Long newSlotId, String reason) {
         requireStatus(booking, "reschedule", BookingStatus.BOOKED);
 
+        Provider provider = providerRepository.findById(booking.getProviderId())
+                .orElseThrow(() -> new ProviderNotFoundException("No provider with id " + booking.getProviderId()));
+        if (provider.getStatus() != ProviderStatus.VERIFIED && provider.getStatus() != ProviderStatus.ACTIVE) {
+            throw new ProviderNotBookableException("Provider is not currently bookable (status " + provider.getStatus() + ").");
+        }
+
         ProviderSlot newSlot = providerSlotRepository.findById(newSlotId)
                 .orElseThrow(() -> new SlotNotAvailableException("No such slot: " + newSlotId));
+        requireClaimable(newSlot, provider.getId());
         if (providerSlotRepository.claimSlot(newSlotId) == 0) {
             throw new SlotNotAvailableException("Slot " + newSlotId + " is no longer available.");
         }

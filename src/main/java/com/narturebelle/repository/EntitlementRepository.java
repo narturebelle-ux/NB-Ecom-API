@@ -15,13 +15,6 @@ public interface EntitlementRepository extends JpaRepository<Entitlement, Long> 
     List<Entitlement> findByUserIdOrderByCreatedAtDesc(Long userId);
     boolean existsByOrderId(Long orderId);
 
-    @Query("select case when count(e) > 0 then true else false end from Entitlement e "
-            + "where e.userId = :userId and e.professionalType = :professionalType "
-            + "and e.usedSessions < e.totalSessions and e.expiresAt > :now")
-    boolean existsConsumable(@Param("userId") Long userId,
-                              @Param("professionalType") Role professionalType,
-                              @Param("now") LocalDateTime now);
-
     /**
      * FIFO candidate for consumption: the non-expired, non-exhausted entitlement for this user+type
      * with the earliest expiresAt. Locked for update — this is a "find-then-increment" pattern, not

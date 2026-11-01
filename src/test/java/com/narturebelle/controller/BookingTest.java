@@ -59,6 +59,7 @@ class BookingTest {
     @Autowired private BookingNoteAmendmentRepository bookingNoteAmendmentRepository;
     @Autowired private EntitlementRepository entitlementRepository;
     @Autowired private PayoutRepository payoutRepository;
+    @Autowired private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
 
     @MockBean
     private FirebaseTokenVerifier firebaseTokenVerifier;
@@ -402,5 +403,111 @@ class BookingTest {
                 .andExpect(status().isOk());
         mockMvc.perform(get("/api/v1/bookings/" + bookingId).header("Authorization", "Bearer " + TOKEN_OTHER_USER))
                 .andExpect(status().isForbidden());
+    }
+
+    private org.springframework.test.web.servlet.ResultActions book(Long slotId) throws Exception {
+        return mockMvc.perform(post("/api/v1/bookings")
+                .header("Authorization", "Bearer " + TOKEN_USER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"providerId\":" + providerId + ",\"serviceOfferingId\":" + serviceOfferingId
+                        + ",\"slotId\":" + slotId + "}"));
+    }
+
+    private Long createSlotFor(Long owner, LocalDateTime start) {
+        ProviderSlot slot = new ProviderSlot();
+        slot.setProviderId(owner);
+        slot.setStartAt(start);
+        slot.setEndAt(start.plusMinutes(30));
+        slot.setStatus(SlotStatus.OPEN);
+        return providerSlotRepository.save(slot).getId();
+    }
+
+    private Long otherProvider() {
+        Provider other = new Provider();
+        other.setUserId(otherUserId);
+        other.setProfessionalType(Role.GYNECOLOGIST);
+        other.setDisplayName("Dr. Other");
+        other.setStatus(ProviderStatus.ACTIVE);
+        return providerRepository.save(other).getId();
+    }
+
+    @Test
+    void create_anotherProvidersSlot_returns409_andLeavesItOpen() throws Exception {
+        Long slotId = createSlotFor(otherProvider(), LocalDateTime.now().plusDays(1));
+        book(slotId).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("SLOT_NOT_AVAILABLE"));
+        assertEquals(SlotStatus.OPEN, providerSlotRepository.findById(slotId).orElseThrow().getStatus());
+    }
+
+    @Test
+    void create_pastSlot_returns409() throws Exception {
+        book(createSlotFor(providerId, LocalDateTime.now().minusHours(1)))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("SLOT_NOT_AVAILABLE"));
+    }
+
+    @Test
+    void create_moreBookingsThanSessions_returns409_untilOneIsCancelled() throws Exception {
+        Long first = createBooking();
+        book(createOpenSlot()).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("NO_ENTITLEMENT_AVAILABLE"));
+
+        mockMvc.perform(post("/api/v1/bookings/" + first + "/cancel")
+                        .header("Authorization", "Bearer " + TOKEN_USER)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"changed plans\"}"))
+                .andExpect(status().isOk());
+        book(createOpenSlot()).andExpect(status().isOk());
+    }
+
+    @Test
+    void reschedule_toAnotherProvidersOrPastSlot_returns409() throws Exception {
+        Long bookingId = createBooking();
+        for (Long slotId : java.util.List.of(createSlotFor(otherProvider(), LocalDateTime.now().plusDays(2)),
+                createSlotFor(providerId, LocalDateTime.now().minusHours(1)))) {
+            mockMvc.perform(post("/api/v1/bookings/" + bookingId + "/reschedule")
+                            .header("Authorization", "Bearer " + TOKEN_USER)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"newSlotId\":" + slotId + ",\"reason\":\"conflict\"}"))
+                    .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("SLOT_NOT_AVAILABLE"));
+        }
+    }
+
+    @Test
+    void reschedule_withPausedProvider_returns409() throws Exception {
+        Long bookingId = createBooking();
+        Long newSlotId = createOpenSlot();
+        Provider provider = providerRepository.findById(providerId).orElseThrow();
+        provider.setStatus(ProviderStatus.PAUSED);
+        providerRepository.save(provider);
+        mockMvc.perform(post("/api/v1/bookings/" + bookingId + "/reschedule")
+                        .header("Authorization", "Bearer " + TOKEN_USER)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"newSlotId\":" + newSlotId + ",\"reason\":\"conflict\"}"))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("PROVIDER_NOT_BOOKABLE"));
+    }
+
+    @Test
+    void adminStatusChange_refusedForOnboardingManagedProvider() throws Exception {
+        jdbcTemplate.execute("create schema if not exists provider_onboarding");
+        jdbcTemplate.execute("create table provider_onboarding.provider_applications (id bigint primary key, provider_id bigint)");
+        try {
+            Provider provider = providerRepository.findById(providerId).orElseThrow();
+            provider.setStatus(ProviderStatus.UNDER_REVIEW);
+            providerRepository.save(provider);
+            jdbcTemplate.update("insert into provider_onboarding.provider_applications (id, provider_id) values (1, ?)", providerId);
+
+            mockMvc.perform(post("/api/v1/admin/providers/" + providerId + "/verify")
+                            .header("Authorization", "Bearer " + TOKEN_ADMIN)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"reason\":\"skip setup\"}"))
+                    .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("INVALID_PROVIDER_STATUS_TRANSITION"));
+            mockMvc.perform(patch("/api/v1/admin/providers/" + providerId + "/status")
+                            .header("Authorization", "Bearer " + TOKEN_ADMIN)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"status\":\"DEACTIVATED\",\"reason\":\"manual\"}"))
+                    .andExpect(status().isConflict());
+            assertEquals(ProviderStatus.UNDER_REVIEW, providerRepository.findById(providerId).orElseThrow().getStatus());
+        } finally {
+            jdbcTemplate.execute("drop table provider_onboarding.provider_applications");
+            jdbcTemplate.execute("drop schema provider_onboarding");
+        }
     }
 }
