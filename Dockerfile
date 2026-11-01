@@ -15,11 +15,14 @@ RUN ./gradlew --no-daemon bootJar -x test
 # ---- Runtime stage ----
 FROM eclipse-temurin:21-jre
 WORKDIR /app
-COPY --from=build /app/build/libs/*.jar app.jar
+COPY --from=build /app/build/libs/*.jar boot.jar
+# Unpacked jars load faster than nested ones. Vercel gives a container about 28s to open its port.
+RUN java -Djarmode=tools -jar boot.jar extract --destination /app/run && rm boot.jar
+WORKDIR /app/run
 
 # Vercel's Container runtime routes to port 80 unless the project sets PORT; server.port reads PORT.
 ENV PORT=80
 EXPOSE 80
-# Use most of the container's memory for the heap (the JVM default is only 25%).
-ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75"
-ENTRYPOINT ["java", "-jar", "app.jar"]
+# Use most of the container's memory for the heap (the JVM default is only 25%). The other two trade peak speed for a faster start.
+ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75 -XX:TieredStopAtLevel=1 -XX:+UseSerialGC"
+ENTRYPOINT ["java", "-jar", "boot.jar"]
