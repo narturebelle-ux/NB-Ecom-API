@@ -3,6 +3,7 @@ package com.narturebelle.controller;
 import com.narturebelle.dto.CreateDeletionRequestRequest;
 import com.narturebelle.dto.DeletionRequestResponse;
 import com.narturebelle.exception.UserProfileNotFoundException;
+import com.narturebelle.mail.MailsClient;
 import com.narturebelle.security.AuthorizationService;
 import com.narturebelle.security.FirebaseUserPrincipal;
 import com.narturebelle.service.AccountDataService;
@@ -24,10 +25,10 @@ import java.time.LocalDate;
 public class AccountDataController {
 
     private final AccountDataService accountDataService;
-    private final com.narturebelle.mail.MailsClient mailsClient;
+    private final MailsClient mailsClient;
     private final AuthorizationService authorizationService;
 
-    public AccountDataController(AccountDataService accountDataService, com.narturebelle.mail.MailsClient mailsClient, AuthorizationService authorizationService) {
+    public AccountDataController(AccountDataService accountDataService, MailsClient mailsClient, AuthorizationService authorizationService) {
         this.accountDataService = accountDataService;
         this.mailsClient = mailsClient;
         this.authorizationService = authorizationService;

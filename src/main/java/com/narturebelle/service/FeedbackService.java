@@ -6,20 +6,16 @@ import com.narturebelle.exception.CareersException;
 import com.narturebelle.model.FeedbackMessage;
 import com.narturebelle.repository.FeedbackMessageRepository;
 import com.narturebelle.security.RateLimiter;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
-import java.time.LocalDateTime;
 
 /** Website "ideas / feedback" form: saved, then emailed to the admin inbox. */
 @Service
 public class FeedbackService {
 
-    private static final Logger log = LoggerFactory.getLogger(FeedbackService.class);
 
     private final FeedbackMessageRepository feedbackMessageRepository;
     private final MailQueue mailQueue;

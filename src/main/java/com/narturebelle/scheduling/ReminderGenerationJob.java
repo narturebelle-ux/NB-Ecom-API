@@ -15,13 +15,15 @@ import com.narturebelle.service.ConsentService;
 import com.narturebelle.service.DashboardService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
+import java.security.GeneralSecurityException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HexFormat;
@@ -46,16 +48,19 @@ public class ReminderGenerationJob {
     private final DashboardService dashboardService;
     private final ConsentService consentService;
     private final MailsClient mailsClient;
+    private final byte[] dedupeSecret;
 
     public ReminderGenerationJob(BookingRepository bookingRepository, JourneyRepository journeyRepository,
                                   UserRepository userRepository, DashboardService dashboardService,
-                                  ConsentService consentService, MailsClient mailsClient) {
+                                  ConsentService consentService, MailsClient mailsClient,
+                                  @Value("${reminders.dedupe-secret}") String dedupeSecret) {
         this.bookingRepository = bookingRepository;
         this.journeyRepository = journeyRepository;
         this.userRepository = userRepository;
         this.dashboardService = dashboardService;
         this.consentService = consentService;
         this.mailsClient = mailsClient;
+        this.dedupeSecret = dedupeSecret.getBytes(StandardCharsets.UTF_8);
     }
 
     @Scheduled(fixedRate = 900_000) // every 15 minutes
@@ -93,14 +98,15 @@ public class ReminderGenerationJob {
         send(due);
     }
 
-    /** One next-step reminder per journey stage, so a dismissal holds until the stage changes. A hash, because a
-     * journey stage is health information and must not leave this API. */
-    static String stageKey(Journey journey) {
+    /** One next-step reminder per journey stage, so a dismissal holds until the stage changes. Keyed with a secret only
+     * this API holds: a journey stage is health information, and a plain hash of so few values could be worked out. */
+    private String stageKey(Journey journey) {
         try {
-            byte[] hash = MessageDigest.getInstance("SHA-256")
-                    .digest((journey.getId() + ":" + journey.getStatus()).getBytes(StandardCharsets.UTF_8));
+            Mac mac = Mac.getInstance("HmacSHA256");
+            mac.init(new SecretKeySpec(dedupeSecret, "HmacSHA256"));
+            byte[] hash = mac.doFinal((journey.getId() + ":" + journey.getStatus()).getBytes(StandardCharsets.UTF_8));
             return HexFormat.of().formatHex(hash, 0, 16);
-        } catch (NoSuchAlgorithmException e) {
+        } catch (GeneralSecurityException e) {
             throw new IllegalStateException(e);
         }
     }

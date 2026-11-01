@@ -13,8 +13,6 @@ import com.narturebelle.repository.JobApplicationResumeRepository;
 import com.narturebelle.repository.JobPostingRepository;
 import com.narturebelle.security.AuditService;
 import com.narturebelle.security.RateLimiter;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -34,7 +32,6 @@ import java.util.Map;
 @Service
 public class CareersService {
 
-    private static final Logger log = LoggerFactory.getLogger(CareersService.class);
 
     /** 4 MB: Vercel rejects any request body over 4.5 MB, and the form fields ride along with the file. */
     static final long MAX_RESUME_BYTES = 4L * 1024 * 1024;

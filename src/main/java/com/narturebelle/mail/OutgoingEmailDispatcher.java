@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.web.client.ResourceAccessException;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -18,7 +19,9 @@ public class OutgoingEmailDispatcher {
 
     /** About a day of scheduler runs. FAILED rows keep their content for the failed-email list (EMAIL_TASKS M7.1). */
     static final int MAX_ATTEMPTS = 96;
-    private static final int RETRY_BATCH = 10;
+    private static final int RETRY_BATCH = 50;
+    /** Enough to wake a sleeping Mails. After this it's down, and waiting out a timeout per row helps nobody. */
+    static final int MAX_UNREACHABLE_IN_A_ROW = 5;
 
     private static final Logger log = LoggerFactory.getLogger(OutgoingEmailDispatcher.class);
 
@@ -42,17 +45,24 @@ public class OutgoingEmailDispatcher {
 
     /** Never throws: a row that wasn't sent stays for the next scheduler run. */
     public void dispatch(Long id) {
+        attempt(id);
+    }
+
+    /** False when Mails couldn't be reached at all. */
+    private boolean attempt(Long id) {
         OutgoingEmail row = requiresNew.execute(status -> outgoingEmailRepository.findById(id).orElse(null));
         if (row == null || row.getStatus() != OutgoingEmail.Status.PENDING) {
-            return;
+            return true;
         }
         try {
             boolean delivered = call(row);
             requiresNew.executeWithoutResult(status -> markSent(id, delivered));
+            return true;
         } catch (Exception e) {
             log.warn("Email row {} not sent yet: {}", id, e.getClass().getSimpleName());
             requiresNew.executeWithoutResult(status -> outgoingEmailRepository.findById(id)
                     .ifPresent(failed -> failed.recordFailedAttempt(MAX_ATTEMPTS)));
+            return !(e instanceof ResourceAccessException);
         }
     }
 
@@ -66,8 +76,16 @@ public class OutgoingEmailDispatcher {
             }
             return locked;
         });
-        ids.forEach(this::dispatch);
-        return ids.size();
+        int tried = 0;
+        int unreachable = 0;
+        for (Long id : ids) {
+            tried++;
+            unreachable = attempt(id) ? 0 : unreachable + 1;
+            if (unreachable >= MAX_UNREACHABLE_IN_A_ROW) {
+                break;
+            }
+        }
+        return tried;
     }
 
     private boolean call(OutgoingEmail row) {

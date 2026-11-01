@@ -142,7 +142,7 @@ class NotificationsTest {
         bookingRepository.save(booking);
 
         ReminderGenerationJob job = new ReminderGenerationJob(bookingRepository, journeyRepository,
-                userRepository, dashboardService, consentService, mailsClient);
+                userRepository, dashboardService, consentService, mailsClient, "test-secret");
         job.generateBookingReminders();
 
         org.mockito.ArgumentCaptor<java.util.List<DueReminder>> sent = org.mockito.ArgumentCaptor.captor();
@@ -174,7 +174,7 @@ class NotificationsTest {
         bookingRepository.save(booking);
 
         ReminderGenerationJob job = new ReminderGenerationJob(bookingRepository, journeyRepository,
-                userRepository, dashboardService, consentService, mailsClient);
+                userRepository, dashboardService, consentService, mailsClient, "test-secret");
         job.generateBookingReminders();
 
         org.mockito.Mockito.verify(mailsClient, org.mockito.Mockito.never()).sendReminders(org.mockito.ArgumentMatchers.any());
@@ -188,7 +188,7 @@ class NotificationsTest {
         journeyRepository.save(journey);
 
         ReminderGenerationJob job = new ReminderGenerationJob(bookingRepository, journeyRepository,
-                userRepository, dashboardService, consentService, mailsClient);
+                userRepository, dashboardService, consentService, mailsClient, "test-secret");
         job.generateJourneyReminders();
 
         org.mockito.ArgumentCaptor<java.util.List<DueReminder>> sent = org.mockito.ArgumentCaptor.captor();
@@ -204,6 +204,13 @@ class NotificationsTest {
         job.generateJourneyReminders();
         org.mockito.Mockito.verify(mailsClient).sendReminders(sent.capture());
         assertNotEquals(firstStage, sent.getValue().get(0).dedupeKey());
+
+        String secondStage = sent.getValue().get(0).dedupeKey();
+        org.mockito.Mockito.clearInvocations(mailsClient);
+        new ReminderGenerationJob(bookingRepository, journeyRepository, userRepository, dashboardService, consentService,
+                mailsClient, "another-secret").generateJourneyReminders();
+        org.mockito.Mockito.verify(mailsClient).sendReminders(sent.capture());
+        assertNotEquals(secondStage, sent.getValue().get(0).dedupeKey(), "the key must depend on the secret");
     }
 
     @Test

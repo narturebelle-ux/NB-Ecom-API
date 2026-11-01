@@ -14,3 +14,17 @@ spring:
 logging:
   level:
     com.narturebelle: DEBUG
+
+# No defaults: a missing value must stop startup, not quietly queue mail until the rows fail a day later.
+mails:
+  base-url: ${MAILS_API_URL}
+
+internal:
+  api-token: ${INTERNAL_API_TOKEN}
+
+reminders:
+  dedupe-secret: ${REMINDER_DEDUPE_SECRET}
+
+# Otherwise application emails would link to the production admin screen.
+careers:
+  admin-url: ${CAREERS_ADMIN_URL}

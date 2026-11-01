@@ -47,6 +47,11 @@ class MailQueueTest {
         repository.deleteAll();
     }
 
+    /** Makes rows due again without changing which was tried least recently. */
+    private void ageRows() {
+        jdbcTemplate.update("update outgoing_emails set created_at = dateadd('MINUTE', -5, created_at), last_attempt_at = dateadd('MINUTE', -5, last_attempt_at)");
+    }
+
     private void makeDue() {
         jdbcTemplate.update("update outgoing_emails set created_at = dateadd('MINUTE', -5, created_at), last_attempt_at = null");
     }
@@ -126,6 +131,50 @@ class MailQueueTest {
     }
 
     @Test
+    void rowsThatKeepFailing_dontStarveANewerRow() {
+        org.mockito.Mockito.when(mailsClient.send(any())).thenAnswer(call -> {
+            OutgoingMail mail = call.getArgument(0);
+            if (mail.to().startsWith("bad")) {
+                throw new RuntimeException("rejected");
+            }
+            return true;
+        });
+        for (int i = 0; i < 55; i++) {
+            mailQueue.sendToAddress("TEST", "bad" + i + "@example.com", null, "Subject", "Text");
+        }
+        OutgoingEmail good = new OutgoingEmail();
+        good.setEventId("care-good");
+        good.setEventType("TEST");
+        good.setKind(OutgoingEmail.Kind.EMAIL);
+        good.setToAddress("good@example.com");
+        good.setSubject("Subject");
+        good.setBody("Text");
+        Long goodId = repository.save(good).getId();
+        ageRows();
+
+        assertEquals(50, dispatcher.retryDue());
+        assertEquals(OutgoingEmail.Status.SENT, repository.findById(goodId).orElseThrow().getStatus());
+
+        ageRows();
+        dispatcher.retryDue();
+        assertTrue(repository.findAll().stream().allMatch(row -> row.getAttempts() >= 2 || row.getId().equals(goodId)),
+                "every failing row gets its turn before any row goes twice");
+    }
+
+    @Test
+    void retry_stopsEarly_whenMailsCantBeReached() {
+        when(mailsClient.send(any())).thenThrow(new org.springframework.web.client.ResourceAccessException("down"));
+        for (int i = 0; i < 20; i++) {
+            mailQueue.sendToAddress("TEST", "x" + i + "@example.com", null, "Subject", "Text");
+        }
+        ageRows();
+        clearInvocations(mailsClient);
+
+        assertEquals(OutgoingEmailDispatcher.MAX_UNREACHABLE_IN_A_ROW, dispatcher.retryDue());
+        verify(mailsClient, times(OutgoingEmailDispatcher.MAX_UNREACHABLE_IN_A_ROW)).send(any());
+    }
+
+    @Test
     void internalEndpoints_needTheToken() throws Exception {
         mockMvc.perform(get("/internal/v1/users/1/contact")).andExpect(status().isUnauthorized());
         mockMvc.perform(get("/internal/v1/users/1/contact").header(InternalTokenFilter.HEADER, "wrong"))
@@ -144,6 +193,8 @@ class MailQueueTest {
         InternalTokenFilter filter = new InternalTokenFilter("");
         org.springframework.mock.web.MockHttpServletRequest request =
                 new org.springframework.mock.web.MockHttpServletRequest("GET", "/internal/v1/users/1/contact");
+        request.setServletPath("/internal/v1/users/1/contact");
+        request.setServletPath(request.getRequestURI()); // What Tomcat sets; a bare mock request has none.
         request.addHeader(InternalTokenFilter.HEADER, "");
         org.springframework.mock.web.MockHttpServletResponse response = new org.springframework.mock.web.MockHttpServletResponse();
         org.springframework.mock.web.MockFilterChain chain = new org.springframework.mock.web.MockFilterChain();

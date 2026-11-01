@@ -17,8 +17,6 @@ import com.narturebelle.repository.IdeaVoteRepository;
 import com.narturebelle.repository.UserRepository;
 import com.narturebelle.security.AuditService;
 import com.narturebelle.security.RateLimiter;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -42,7 +40,6 @@ import java.util.stream.Collectors;
 @Service
 public class IdeaService {
 
-    private static final Logger log = LoggerFactory.getLogger(IdeaService.class);
     static final String POOL_FLAG = "ideaPool";
     private static final List<IdeaStatus> VISIBLE = List.of(IdeaStatus.OPEN, IdeaStatus.UNDER_REVIEW, IdeaStatus.IMPLEMENTED);
 

@@ -15,6 +15,7 @@ import com.narturebelle.model.User;
 import com.narturebelle.repository.*;
 import com.narturebelle.security.AuditService;
 import org.springframework.stereotype.Service;
+import com.narturebelle.mail.MailsUnavailableException;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
@@ -114,6 +115,9 @@ public class AccountDataService {
      * is held while waiting on that service. */
     @Transactional
     public byte[] export(Long userId, Map<String, Object> mailsData) {
+        if (mailsData == null || !mailsData.containsKey("reminders") || !mailsData.containsKey("notificationPreferences")) {
+            throw new MailsUnavailableException(new IllegalStateException("Incomplete answer from the notifications service"));
+        }
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UserProfileNotFoundException("User profile not found."));
 
@@ -155,7 +159,8 @@ public class AccountDataService {
         export.put("healthRecords", records);
         export.put("recordShares", records.stream()
                 .flatMap(r -> recordShareRepository.findByRecordIdOrderByCreatedAtDesc(r.getId()).stream()).toList());
-        export.putAll(mailsData);
+        export.put("reminders", mailsData.get("reminders"));
+        export.put("notificationPreferences", mailsData.get("notificationPreferences"));
         export.put("children", children);
         export.put("childVaccinations", children.stream()
                 .flatMap(c -> childVaccinationRepository.findByChildId(c.getId()).stream()).toList());

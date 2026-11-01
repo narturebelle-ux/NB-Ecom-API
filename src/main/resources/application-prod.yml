@@ -20,3 +20,13 @@ logging:
 # professionals could sign the DRAFT agreement and placeholder fee.
 onboarding:
   agreement-signing-enabled: ${AGREEMENT_SIGNING_ENABLED:false}
+
+# No defaults: a missing value must stop startup, not quietly queue mail until the rows fail a day later.
+mails:
+  base-url: ${MAILS_API_URL}
+
+internal:
+  api-token: ${INTERNAL_API_TOKEN}
+
+reminders:
+  dedupe-secret: ${REMINDER_DEDUPE_SECRET}

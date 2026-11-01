@@ -88,6 +88,10 @@ records:
 mails:
   base-url: ${MAILS_API_URL:http://localhost:8082}
 
+# Keys the reminder dedupe hash. Stays in this API: never share it with NB-Ecom-Mails-API.
+reminders:
+  dedupe-secret: ${REMINDER_DEDUPE_SECRET:dev-only-reminder-dedupe-secret}
+
 # The private token shared with the other NartureBelle services. Empty means every /internal call is refused.
 internal:
   api-token: ${INTERNAL_API_TOKEN:}

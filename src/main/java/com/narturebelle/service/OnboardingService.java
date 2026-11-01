@@ -1,5 +1,6 @@
 package com.narturebelle.service;
 
+import com.narturebelle.mail.MailQueue;
 import com.narturebelle.dto.BookOnboardingCallRequest;
 import com.narturebelle.dto.CreateCallbackRequestRequest;
 import com.narturebelle.dto.CreateOnboardingCallSlotsRequest;
@@ -52,7 +53,7 @@ public class OnboardingService {
     private final OnboardingCompletionRepository onboardingCompletionRepository;
     private final OrderRepository orderRepository;
     private final UserRepository userRepository;
-    private final com.narturebelle.mail.MailQueue mailQueue;
+    private final MailQueue mailQueue;
     private final AuditService auditService;
     private final CoordinatorRepository coordinatorRepository;
     private final HealthProfileService healthProfileService;
@@ -66,7 +67,7 @@ public class OnboardingService {
                               OnboardingCompletionRepository onboardingCompletionRepository,
                               OrderRepository orderRepository,
                               UserRepository userRepository,
-                              com.narturebelle.mail.MailQueue mailQueue,
+                              MailQueue mailQueue,
                               AuditService auditService,
                               CoordinatorRepository coordinatorRepository,
                               HealthProfileService healthProfileService) {
