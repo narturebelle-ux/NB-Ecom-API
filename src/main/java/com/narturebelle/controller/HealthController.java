@@ -1,5 +1,7 @@
 package com.narturebelle.controller;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -11,6 +13,8 @@ import java.util.Map;
 @RestController
 @RequestMapping("/health")
 public class HealthController {
+
+    private static final Logger log = LoggerFactory.getLogger(HealthController.class);
 
     private final JdbcTemplate jdbcTemplate;
 
@@ -24,10 +28,9 @@ public class HealthController {
             jdbcTemplate.queryForObject("SELECT 1", Integer.class);
             return ResponseEntity.ok(Map.of("database", "ok"));
         } catch (Exception e) {
-            return ResponseEntity.status(503).body(Map.of(
-                    "database", "error",
-                    "message", e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName()
-            ));
+            // This endpoint is public, so the details stay in the log: they can name hosts and users.
+            log.error("Database health check failed", e);
+            return ResponseEntity.status(503).body(Map.of("database", "error"));
         }
     }
 }
