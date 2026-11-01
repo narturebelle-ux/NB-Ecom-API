@@ -8,7 +8,7 @@ server:
 
 spring:
   datasource:
-    url: jdbc:h2:mem:narturebelle_testdb;DB_CLOSE_DELAY=-1
+    url: jdbc:h2:mem:narturebelle_testdb;DB_CLOSE_DELAY=-1;INIT=CREATE SCHEMA IF NOT EXISTS provider_onboarding
     driver-class-name: org.h2.Driver
     username: sa
     password: password
@@ -17,6 +17,8 @@ spring:
     hibernate:
       ddl-auto: create-drop
     show-sql: true
+    properties:
+      hibernate.hbm2ddl.create_namespaces: true
   # Flyway targets Postgres-specific SQL; tests stay on H2 create-drop instead (see HANDOFF.md).
   # If H2/Postgres schema drift becomes a real problem, switch to Testcontainers Postgres.
   flyway:
@@ -28,6 +30,9 @@ spring:
 supabase:
   url: http://localhost:9999
   service-role-key: test-service-role-key
+
+data:
+  encryption-key: MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=
 
 narturebelle:
   scheduling:

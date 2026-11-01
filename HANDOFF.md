@@ -289,3 +289,34 @@ Product-owner design (2026-10-30): signed-in members post ideas into a public po
 ## 15. Referral links & free Premium reward
 
 Product-owner decision (2026-10-30): each member gets a referral code; after 5 referred friends buy a plan she earns a free Premium plan (full 9 months), once, and only she is rewarded. Tables in V30 (`referral_codes`, `referrals` with one row per referred member, `referral_rewards` keyed by member). `PaymentService.handleSucceeded` calls `ReferralService.onOrderPaid` **after the webhook transaction commits**, in a REQUIRES_NEW transaction with errors logged, so referral bookkeeping can never roll back a payment. The reward is a zero-price PAID order for the active PREMIUM version, plus the usual `grantForOrder` entitlements. `ReferralReward` is `Persistable` (always INSERT), so a concurrent second grant hits the primary key. Zero-price orders never qualify a referral. Claiming is for new customers only (no real PAID order yet). Contract in `UI_INTEGRATION_GUIDE.md` §16; covered by `ReferralTest`, which drives real checkouts. **V30 depends on V29 (idea pool): merge `feature/idea-impact` before this branch.** Open product-owner points: whether a refunded friend should un-qualify (today it stays counted), and whether the reward is once ever (today) or repeatable every 5.
+
+## Care professional onboarding merged into this API
+
+Owner decision, 1 Nov 2026 (`PROVIDERS_MERGE_BRIEF.md`). The code from `NB-Ecom-Providers-API` now lives in `com.narturebelle.providers`, with the same paths and JSON. The 11 provider endpoints this repo already served are unchanged, and so are session completion, entitlements and payouts. The Providers repo still exists; the owner decides whether to archive it after checking.
+
+- **Second migration history.** `db/migration_provider_onboarding/V1` is byte-identical to the Providers repo's file. `ProviderOnboardingFlywayConfig` migrates `public` and then `provider_onboarding`, with its own history table and `baselineOnMigrate(false)`. Proved on a blank Postgres: 30 + 1 migrations applied.
+- **Encryption key deliberately unset.** Without `DATA_ENCRYPTION_KEY` the app starts, and PAN and bank number fields return 503 `ENCRYPTION_NOT_CONFIGURED`. Never generate a key or fall back to plain text.
+- **Signing is off in prod** (`application-prod.yml`) until `AGREEMENT_SIGNING_ENABLED=true`, once the real fees, agreement and training text exist.
+
+**Behaviour changes that now apply to this whole API, as the brief directs:**
+- A database failure while loading the signed-in user returns 503 `SERVICE_UNAVAILABLE`, not 401.
+- Audit reasons are cut to 255 characters instead of failing.
+- Resend calls have 5s connect and 10s read timeouts.
+- A missing multipart part returns 400 `VALIDATION_FAILED` instead of 500.
+
+**Differences for the moved endpoints, from keeping this repo's error handler:**
+- The `VALIDATION_FAILED` message reads "One or more fields are invalid." (was "Please check the highlighted fields.").
+- Bad parameter and malformed-body errors use this repo's messages, with `fields` where it adds them.
+- An unknown route is an empty 404 (was `{code: NOT_FOUND}`).
+Codes, statuses and `fields` for known routes are the same.
+
+**Known debt:**
+- The provider module reads other modules' tables directly through this repo's repositories, which breaks the "no reading another module's tables" rule. The schema-per-module migration of `public` is a separate job.
+- The connection pool stays at 5, and now serves what used to be two services (3 + 5 before). Change it only if the owner asks.
+- `AuthorizationService` and `GlobalExceptionHandler` now depend on `ProviderOnboardingException`, a reverse dependency from shared code into the module.
+- `ApplicationDocumentScanner` is still a no-op: connect a real scanner before staff open files from the public.
+- Daily rules run at 03:30 IST and on start, so on a host that sleeps they wait for the next start.
+
+**Before the first prod deploy:** check prod's migration state. This API's start will create `provider_onboarding` there.
+
+**Owner decisions after the merge (1 Nov 2026):** go-live removes `MOTHER`, leaving only the profession role (the older admin path `ProviderService.grantProfessionalRoleIfAbsent` still only adds a role). `GET /provider-workspace/feedback` shows a professional their feedback without identifying the mother; with very few sessions they could still guess who wrote it.

@@ -3,6 +3,7 @@ package com.narturebelle.email;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
@@ -22,7 +23,11 @@ public class ResendEmailSender implements EmailSender {
 
     public ResendEmailSender(@Value("${email.resend.api-key}") String apiKey, @Value("${email.from}") String from) {
         this.from = from;
+        SimpleClientHttpRequestFactory timeouts = new SimpleClientHttpRequestFactory();
+        timeouts.setConnectTimeout(5000);
+        timeouts.setReadTimeout(10000);
         this.restClient = RestClient.builder()
+                .requestFactory(timeouts)
                 .baseUrl("https://api.resend.com")
                 .defaultHeader("Authorization", "Bearer " + apiKey)
                 .build();

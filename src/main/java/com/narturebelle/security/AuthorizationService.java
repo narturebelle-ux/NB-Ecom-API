@@ -1,5 +1,6 @@
 package com.narturebelle.security;
 
+import com.narturebelle.providers.exception.ProviderOnboardingException;
 import com.narturebelle.model.Booking;
 import com.narturebelle.model.HealthRecord;
 import com.narturebelle.model.Provider;
@@ -51,6 +52,25 @@ public class AuthorizationService {
             return Optional.of(principal);
         }
         return Optional.empty();
+    }
+
+    /** The caller's users.id. Null means she never called POST /auth/firebase. */
+    public Long requireUserId() {
+        Long userId = currentPrincipal().userId();
+        if (userId == null) {
+            throw new ProviderOnboardingException(409, "ACCOUNT_NOT_REGISTERED", "Please finish signing in first.");
+        }
+        return userId;
+    }
+
+    public void requireRole(Role role) {
+        if (!currentPrincipal().roles().contains(role)) {
+            throw new AccessDeniedException("Requires " + role);
+        }
+    }
+
+    public boolean hasRole(Role role) {
+        return currentPrincipal().roles().contains(role);
     }
 
     /** Throws AccessDeniedException (-> 403 FORBIDDEN) unless the caller is the target user or an admin. */

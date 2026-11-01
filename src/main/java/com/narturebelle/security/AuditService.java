@@ -17,6 +17,7 @@ import java.util.stream.Collectors;
 public class AuditService {
 
     private static final Logger log = LoggerFactory.getLogger(AuditService.class);
+    private static final int MAX_REASON = 255;
 
     private final AuditEventRepository auditEventRepository;
     private final AuthorizationService authorizationService;
@@ -47,7 +48,7 @@ public class AuditService {
         event.setAction(action);
         event.setSubjectType(subjectType);
         event.setSubjectId(subjectId);
-        event.setReason(reason);
+        event.setReason(reason != null && reason.length() > MAX_REASON ? reason.substring(0, MAX_REASON) : reason);
         event.setRequestId(UUID.randomUUID().toString());
 
         if (metadata != null && !metadata.isEmpty()) {
