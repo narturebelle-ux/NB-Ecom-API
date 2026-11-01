@@ -24,17 +24,20 @@ import java.time.LocalDate;
 public class AccountDataController {
 
     private final AccountDataService accountDataService;
+    private final com.narturebelle.mail.MailsClient mailsClient;
     private final AuthorizationService authorizationService;
 
-    public AccountDataController(AccountDataService accountDataService, AuthorizationService authorizationService) {
+    public AccountDataController(AccountDataService accountDataService, com.narturebelle.mail.MailsClient mailsClient, AuthorizationService authorizationService) {
         this.accountDataService = accountDataService;
+        this.mailsClient = mailsClient;
         this.authorizationService = authorizationService;
     }
 
     @GetMapping("/export")
     public ResponseEntity<byte[]> export() {
         Long userId = requireUserId(authorizationService.currentPrincipal());
-        byte[] body = accountDataService.export(userId);
+        // Mails owns reminders and preferences. If it's down the export fails with a 503, never quietly leaves them out.
+        byte[] body = accountDataService.export(userId, mailsClient.exportFor(userId));
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_JSON)
                 .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment()

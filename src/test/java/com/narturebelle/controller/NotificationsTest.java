@@ -10,9 +10,6 @@ import com.narturebelle.model.Payment;
 import com.narturebelle.model.PaymentStatus;
 import com.narturebelle.model.Provider;
 import com.narturebelle.model.ProviderStatus;
-import com.narturebelle.model.ReminderSourceType;
-import com.narturebelle.model.ReminderStatus;
-import com.narturebelle.model.ReminderType;
 import com.narturebelle.model.Role;
 import com.narturebelle.model.User;
 import com.narturebelle.repository.AuditEventRepository;
@@ -22,7 +19,6 @@ import com.narturebelle.repository.JourneyRepository;
 import com.narturebelle.repository.PaymentRepository;
 import com.narturebelle.repository.PaymentReconciliationFlagRepository;
 import com.narturebelle.repository.ProviderRepository;
-import com.narturebelle.repository.ReminderRepository;
 import com.narturebelle.repository.UserRepository;
 import com.narturebelle.scheduling.PaymentReconciliationJob;
 import com.narturebelle.scheduling.ReminderGenerationJob;
@@ -31,8 +27,8 @@ import com.narturebelle.security.FirebaseTokenVerifier;
 import com.narturebelle.security.VerifiedFirebaseToken;
 import com.narturebelle.service.ConsentService;
 import com.narturebelle.service.DashboardService;
-import com.narturebelle.service.NotificationPreferenceService;
-import com.narturebelle.service.NotificationService;
+import com.narturebelle.mail.DueReminder;
+import com.narturebelle.mail.MailsClient;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -48,14 +44,16 @@ import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.mockito.Mockito.when;
 
-/** Covers Phase 5: reminder generation (idempotent), notification preferences (defaults + override),
- * the reminder list/dismiss endpoints, and the payment-reconciliation dedupe job. */
+/** Covers the Care side of reminders (deciding what is due and checking consent) and the
+ * payment-reconciliation dedupe job. Preferences and reminder rows are tested in NB-Ecom-Mails-API. */
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
@@ -73,14 +71,12 @@ class NotificationsTest {
     @Autowired private PaymentRepository paymentRepository;
     @Autowired private PaymentReconciliationFlagRepository paymentReconciliationFlagRepository;
     @Autowired private AuditEventRepository auditEventRepository;
-    @Autowired private ReminderRepository reminderRepository;
-    @Autowired private NotificationService notificationService;
-    @Autowired private NotificationPreferenceService notificationPreferenceService;
     @Autowired private ConsentService consentService;
     @Autowired private DashboardService dashboardService;
     @Autowired private AuditService auditService;
 
     @MockBean private FirebaseTokenVerifier firebaseTokenVerifier;
+    @MockBean private MailsClient mailsClient;
 
     private Long userId;
     private Long otherUserId;
@@ -88,7 +84,6 @@ class NotificationsTest {
     @BeforeEach
     void setUp() throws Exception {
         auditEventRepository.deleteAll();
-        reminderRepository.deleteAll();
         paymentReconciliationFlagRepository.deleteAll();
         paymentRepository.deleteAll();
         bookingRepository.deleteAll();
@@ -128,62 +123,7 @@ class NotificationsTest {
     }
 
     @Test
-    void notificationPreferences_defaultInAppOnEverythingElseOff_andCanBeOverridden() throws Exception {
-        mockMvc.perform(get("/api/v1/me/notification-preferences").header("Authorization", "Bearer " + TOKEN))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$[?(@.channel=='IN_APP')].enabled").value(true))
-                .andExpect(jsonPath("$[?(@.channel=='EMAIL')].enabled").value(false));
-
-        mockMvc.perform(put("/api/v1/me/notification-preferences/EMAIL")
-                        .header("Authorization", "Bearer " + TOKEN)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"enabled\":true}"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.enabled").value(true));
-
-        assertTrue(notificationPreferenceService.isEnabled(userId, com.narturebelle.model.NotificationChannelType.EMAIL));
-    }
-
-    @Test
-    void notifyService_isIdempotent_forSameSource() {
-        notificationService.notify(userId, ReminderType.BOOKING_UPCOMING, "Upcoming care session",
-                "You have an upcoming care session.", ReminderSourceType.BOOKING, 999L, LocalDateTime.now());
-        notificationService.notify(userId, ReminderType.BOOKING_UPCOMING, "Upcoming care session",
-                "You have an upcoming care session.", ReminderSourceType.BOOKING, 999L, LocalDateTime.now());
-
-        long count = reminderRepository.findByUserIdAndStatusOrderByCreatedAtDesc(userId, ReminderStatus.ACTIVE).stream()
-                .filter(r -> r.getSourceType() == ReminderSourceType.BOOKING && r.getSourceId().equals(999L))
-                .count();
-        assertEquals(1, count);
-    }
-
-    @Test
-    void reminderList_andDismiss_ownershipEnforced() throws Exception {
-        notificationService.notify(userId, ReminderType.JOURNEY_NEXT_ACTION, "New recommended next steps",
-                "Check your journey.", ReminderSourceType.JOURNEY, 1L, null);
-
-        String body = mockMvc.perform(get("/api/v1/me/reminders").header("Authorization", "Bearer " + TOKEN))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$", org.hamcrest.Matchers.hasSize(1)))
-                .andReturn().getResponse().getContentAsString();
-        Long reminderId = Long.valueOf(body.replaceAll(".*\"id\":(\\d+).*", "$1"));
-
-        mockMvc.perform(post("/api/v1/me/reminders/" + reminderId + "/dismiss")
-                        .header("Authorization", "Bearer " + TOKEN_OTHER))
-                .andExpect(status().isForbidden());
-
-        mockMvc.perform(post("/api/v1/me/reminders/" + reminderId + "/dismiss")
-                        .header("Authorization", "Bearer " + TOKEN))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("DISMISSED"));
-
-        mockMvc.perform(get("/api/v1/me/reminders").header("Authorization", "Bearer " + TOKEN))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$", org.hamcrest.Matchers.hasSize(0)));
-    }
-
-    @Test
-    void reminderGenerationJob_createsBookingReminder_onlyOnce() {
+    void reminderGenerationJob_tellsMailsAboutADueBooking() {
         Provider provider = new Provider();
         provider.setUserId(otherUserId);
         provider.setProfessionalType(Role.GYNECOLOGIST);
@@ -202,14 +142,14 @@ class NotificationsTest {
         bookingRepository.save(booking);
 
         ReminderGenerationJob job = new ReminderGenerationJob(bookingRepository, journeyRepository,
-                userRepository, dashboardService, consentService, notificationService);
+                userRepository, dashboardService, consentService, mailsClient);
         job.generateBookingReminders();
-        job.generateBookingReminders(); // idempotent re-run
 
-        long count = reminderRepository.findByUserIdAndStatusOrderByCreatedAtDesc(userId, ReminderStatus.ACTIVE).stream()
-                .filter(r -> r.getType() == ReminderType.BOOKING_UPCOMING)
-                .count();
-        assertEquals(1, count);
+        org.mockito.ArgumentCaptor<java.util.List<DueReminder>> sent = org.mockito.ArgumentCaptor.captor();
+        org.mockito.Mockito.verify(mailsClient).sendReminders(sent.capture());
+        assertEquals(1, sent.getValue().size());
+        assertEquals("BOOKING_UPCOMING", sent.getValue().get(0).type());
+        assertEquals(userId, sent.getValue().get(0).userId());
     }
 
     @Test
@@ -234,26 +174,36 @@ class NotificationsTest {
         bookingRepository.save(booking);
 
         ReminderGenerationJob job = new ReminderGenerationJob(bookingRepository, journeyRepository,
-                userRepository, dashboardService, consentService, notificationService);
+                userRepository, dashboardService, consentService, mailsClient);
         job.generateBookingReminders();
 
-        assertTrue(reminderRepository.findByUserIdAndStatusOrderByCreatedAtDesc(unconsentedUserId, ReminderStatus.ACTIVE).isEmpty());
+        org.mockito.Mockito.verify(mailsClient, org.mockito.Mockito.never()).sendReminders(org.mockito.ArgumentMatchers.any());
     }
 
     @Test
-    void reminderGenerationJob_createsJourneyReminder_whenNextActionsExist() {
+    void reminderGenerationJob_tellsMailsAboutNextActions() {
         Journey journey = new Journey();
         journey.setUserId(userId);
         journey.setStatus(JourneyStatus.PREGNANCY);
         journeyRepository.save(journey);
 
         ReminderGenerationJob job = new ReminderGenerationJob(bookingRepository, journeyRepository,
-                userRepository, dashboardService, consentService, notificationService);
+                userRepository, dashboardService, consentService, mailsClient);
         job.generateJourneyReminders();
 
-        assertEquals(1, reminderRepository.findByUserIdAndStatusOrderByCreatedAtDesc(userId, ReminderStatus.ACTIVE).stream()
-                .filter(r -> r.getType() == ReminderType.JOURNEY_NEXT_ACTION)
-                .count());
+        org.mockito.ArgumentCaptor<java.util.List<DueReminder>> sent = org.mockito.ArgumentCaptor.captor();
+        org.mockito.Mockito.verify(mailsClient).sendReminders(sent.capture());
+        assertEquals("JOURNEY_NEXT_ACTION", sent.getValue().get(0).type());
+
+        String firstStage = sent.getValue().get(0).dedupeKey();
+        assertEquals(32, firstStage.length());
+        assertFalse(firstStage.contains("PREGNANCY"));
+        journey.setStatus(JourneyStatus.POSTPARTUM);
+        org.mockito.Mockito.clearInvocations(mailsClient);
+        journeyRepository.save(journey);
+        job.generateJourneyReminders();
+        org.mockito.Mockito.verify(mailsClient).sendReminders(sent.capture());
+        assertNotEquals(firstStage, sent.getValue().get(0).dedupeKey());
     }
 
     @Test

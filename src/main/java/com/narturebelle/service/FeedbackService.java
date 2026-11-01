@@ -1,8 +1,7 @@
 package com.narturebelle.service;
 
 import com.narturebelle.dto.FeedbackRequest;
-import com.narturebelle.email.EmailMessage;
-import com.narturebelle.email.EmailSender;
+import com.narturebelle.mail.MailQueue;
 import com.narturebelle.exception.CareersException;
 import com.narturebelle.model.FeedbackMessage;
 import com.narturebelle.repository.FeedbackMessageRepository;
@@ -11,6 +10,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -22,18 +22,19 @@ public class FeedbackService {
     private static final Logger log = LoggerFactory.getLogger(FeedbackService.class);
 
     private final FeedbackMessageRepository feedbackMessageRepository;
-    private final EmailSender emailSender;
+    private final MailQueue mailQueue;
     private final RateLimiter rateLimiter;
     private final String adminEmail;
 
-    public FeedbackService(FeedbackMessageRepository feedbackMessageRepository, EmailSender emailSender,
+    public FeedbackService(FeedbackMessageRepository feedbackMessageRepository, MailQueue mailQueue,
                            RateLimiter rateLimiter, @Value("${careers.admin-email}") String adminEmail) {
         this.feedbackMessageRepository = feedbackMessageRepository;
-        this.emailSender = emailSender;
+        this.mailQueue = mailQueue;
         this.rateLimiter = rateLimiter;
         this.adminEmail = adminEmail;
     }
 
+    @Transactional
     public FeedbackMessage submit(FeedbackRequest req, Long userId, String clientIp) {
         if (!rateLimiter.tryAcquire("feedback-ip:" + clientIp, 10, Duration.ofHours(1))) {
             throw new CareersException(429, "TOO_MANY_REQUESTS", "Too many messages. Please try again later.");
@@ -56,15 +57,7 @@ public class FeedbackService {
                 + saved.getMessage();
         String subject = "Website feedback" + (saved.getRating() == null ? "" : " (" + saved.getRating() + "/5)")
                 + (saved.getName() == null ? "" : " from " + CareersService.oneLine(saved.getName()));
-        try {
-            emailSender.send(new EmailMessage(adminEmail, saved.getEmail(), subject, text, null));
-            if (emailSender.delivers()) {
-                saved.setAdminNotifiedAt(LocalDateTime.now());
-                saved = feedbackMessageRepository.save(saved);
-            }
-        } catch (Exception e) {
-            log.warn("Feedback email failed for feedback {}: {}", saved.getId(), e.getMessage());
-        }
+        mailQueue.sendFeedbackNotice(saved.getId(), adminEmail, saved.getEmail(), subject, text);
         return saved;
     }
 

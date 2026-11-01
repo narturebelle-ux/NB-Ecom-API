@@ -1,8 +1,8 @@
 package com.narturebelle.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.narturebelle.email.EmailMessage;
-import com.narturebelle.email.EmailSender;
+import com.narturebelle.mail.OutgoingMail;
+import com.narturebelle.mail.MailsClient;
 import com.narturebelle.model.*;
 import com.narturebelle.repository.*;
 import com.narturebelle.security.FirebaseTokenVerifier;
@@ -50,7 +50,7 @@ class ReferralTest {
     @Autowired private PlanRepository planRepository;
 
     @MockBean private FirebaseTokenVerifier firebaseTokenVerifier;
-    @MockBean private EmailSender emailSender;
+    @MockBean private MailsClient mailsClient;
 
     private Long sharerId;
 
@@ -162,9 +162,9 @@ class ReferralTest {
         assertEquals(PlanCode.PREMIUM, planRepository.findById(premium.getPlanId()).orElseThrow().getCode());
         assertFalse(entitlementRepository.findByUserIdOrderByCreatedAtDesc(sharerId).isEmpty());
 
-        ArgumentCaptor<EmailMessage> sent = ArgumentCaptor.forClass(EmailMessage.class);
-        verify(emailSender, times(1)).send(sent.capture());
-        assertEquals("sharer@example.com", sent.getValue().to());
+        ArgumentCaptor<OutgoingMail> sent = ArgumentCaptor.forClass(OutgoingMail.class);
+        verify(mailsClient, times(1)).send(sent.capture());
+        assertEquals(sharerId, sent.getValue().userId());
     }
 
     @Test

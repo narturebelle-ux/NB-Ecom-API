@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.narturebelle.providers.dto.FormDtos.FormQuestion;
 import com.narturebelle.providers.dto.FormDtos.QuestionType;
-import com.narturebelle.email.EmailSender;
+import com.narturebelle.mail.MailsClient;
 import com.narturebelle.providers.model.ApplicationStatus;
 import com.narturebelle.model.BookingStatus;
 import com.narturebelle.providers.model.ProviderApplication;
@@ -89,7 +89,7 @@ class ProviderOnboardingTest {
     @Autowired private AuditEventRepository auditRepository;
 
     @MockBean private FirebaseTokenVerifier firebaseTokenVerifier;
-    @MockBean private EmailSender emailSender;
+    @MockBean private MailsClient mailsClient;
 
     private String applicant;
     private Long applicantId;

@@ -45,8 +45,6 @@ public class AccountDataService {
     private final BookingRepository bookingRepository;
     private final HealthRecordRepository healthRecordRepository;
     private final RecordShareRepository recordShareRepository;
-    private final ReminderRepository reminderRepository;
-    private final NotificationPreferenceRepository notificationPreferenceRepository;
     private final ChildRepository childRepository;
     private final ChildVaccinationRepository childVaccinationRepository;
     private final HospitalReferralRepository hospitalReferralRepository;
@@ -72,8 +70,6 @@ public class AccountDataService {
                               BookingRepository bookingRepository,
                               HealthRecordRepository healthRecordRepository,
                               RecordShareRepository recordShareRepository,
-                              ReminderRepository reminderRepository,
-                              NotificationPreferenceRepository notificationPreferenceRepository,
                               ChildRepository childRepository,
                               ChildVaccinationRepository childVaccinationRepository,
                               HospitalReferralRepository hospitalReferralRepository,
@@ -98,8 +94,6 @@ public class AccountDataService {
         this.bookingRepository = bookingRepository;
         this.healthRecordRepository = healthRecordRepository;
         this.recordShareRepository = recordShareRepository;
-        this.reminderRepository = reminderRepository;
-        this.notificationPreferenceRepository = notificationPreferenceRepository;
         this.childRepository = childRepository;
         this.childVaccinationRepository = childVaccinationRepository;
         this.hospitalReferralRepository = hospitalReferralRepository;
@@ -116,8 +110,10 @@ public class AccountDataService {
      * transaction so element collections load. Health-record files themselves aren't included --
      * only their metadata; the files stay downloadable through /records/{id}/download-url.
      */
-    @Transactional(readOnly = true)
-    public byte[] export(Long userId) {
+    /** Not read-only: it writes the audit row. mailsData is fetched by the caller first, so no database connection
+     * is held while waiting on that service. */
+    @Transactional
+    public byte[] export(Long userId, Map<String, Object> mailsData) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UserProfileNotFoundException("User profile not found."));
 
@@ -159,8 +155,7 @@ public class AccountDataService {
         export.put("healthRecords", records);
         export.put("recordShares", records.stream()
                 .flatMap(r -> recordShareRepository.findByRecordIdOrderByCreatedAtDesc(r.getId()).stream()).toList());
-        export.put("reminders", reminderRepository.findByUserIdOrderByCreatedAtDesc(userId));
-        export.put("notificationPreferences", notificationPreferenceRepository.findByUserId(userId));
+        export.putAll(mailsData);
         export.put("children", children);
         export.put("childVaccinations", children.stream()
                 .flatMap(c -> childVaccinationRepository.findByChildId(c.getId()).stream()).toList());
