@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Optional;
 
 public interface JourneyRepository extends JpaRepository<Journey, Long> {
+    boolean existsByUserId(Long userId);
 
     List<Journey> findByUserIdOrderByStartedAtDesc(Long userId);
 

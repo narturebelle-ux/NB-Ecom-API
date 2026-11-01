@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Optional;
 
 public interface PayoutRepository extends JpaRepository<Payout, Long> {
+    List<Payout> findByProviderIdOrderByCreatedAtDesc(Long providerId);
     List<Payout> findByProviderId(Long providerId);
     Optional<Payout> findByBookingId(Long bookingId);
 }

@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Optional;
 
 public interface ServiceOfferingRepository extends JpaRepository<ServiceOffering, Long> {
+    List<ServiceOffering> findByProviderIdOrderByCreatedAtDesc(Long providerId);
     List<ServiceOffering> findByProviderId(Long providerId);
     Optional<ServiceOffering> findByIdAndProviderId(Long id, Long providerId);
 }
