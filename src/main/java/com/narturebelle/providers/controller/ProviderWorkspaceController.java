@@ -3,6 +3,7 @@ package com.narturebelle.providers.controller;
 import com.narturebelle.providers.dto.WorkspaceDtos.ChangeRequestBody;
 import com.narturebelle.providers.dto.WorkspaceDtos.ChangeRequestResponse;
 import com.narturebelle.providers.dto.WorkspaceDtos.EarningsResponse;
+import com.narturebelle.providers.dto.WorkspaceDtos.FeedbackResponse;
 import com.narturebelle.providers.dto.WorkspaceDtos.ProductActivityItem;
 import com.narturebelle.providers.dto.WorkspaceDtos.ProfileResponse;
 import com.narturebelle.providers.dto.WorkspaceDtos.ServiceRequest;
@@ -67,6 +68,11 @@ public class ProviderWorkspaceController {
     @GetMapping("/earnings")
     public ResponseEntity<EarningsResponse> earnings() {
         return ResponseEntity.ok(workspaceService.earnings());
+    }
+
+    @GetMapping("/feedback")
+    public ResponseEntity<FeedbackResponse> feedback() {
+        return ResponseEntity.ok(workspaceService.feedback());
     }
 
     @GetMapping("/product-activity")

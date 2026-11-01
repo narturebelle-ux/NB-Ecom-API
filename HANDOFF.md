@@ -318,3 +318,5 @@ Codes, statuses and `fields` for known routes are the same.
 - Daily rules run at 03:30 IST and on start, so on a host that sleeps they wait for the next start.
 
 **Before the first prod deploy:** check prod's migration state. This API's start will create `provider_onboarding` there.
+
+**Owner decisions after the merge (1 Nov 2026):** go-live removes `MOTHER`, leaving only the profession role (the older admin path `ProviderService.grantProfessionalRoleIfAbsent` still only adds a role). `GET /provider-workspace/feedback` shows a professional their feedback without identifying the mother; with very few sessions they could still guess who wrote it.

@@ -5,6 +5,7 @@ import com.narturebelle.providers.model.ApplicationStatus;
 import com.narturebelle.model.BookingStatus;
 import com.narturebelle.providers.model.ProviderApplication;
 import com.narturebelle.model.ProviderStatus;
+import com.narturebelle.model.Role;
 import com.narturebelle.model.SlotStatus;
 import com.narturebelle.model.Booking;
 import com.narturebelle.model.Provider;
@@ -81,6 +82,9 @@ public class ProviderLifecycleService {
 
         User user = userRepository.findById(application.getUserId())
                 .orElseThrow(() -> new IllegalStateException("Application references a missing user: " + application.getUserId()));
+        // Owner decision: a live professional is a professional only. The application form already refuses accounts
+        // with mother data, so nothing is lost. Every API check looks for a specific role; none relies on MOTHER.
+        user.getRoles().remove(Role.MOTHER);
         user.getRoles().add(application.getProfessionalType());
         userRepository.save(user);
 
