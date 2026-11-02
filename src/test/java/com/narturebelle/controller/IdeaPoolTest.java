@@ -1,8 +1,8 @@
 package com.narturebelle.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.narturebelle.email.EmailMessage;
-import com.narturebelle.email.EmailSender;
+import com.narturebelle.mail.OutgoingMail;
+import com.narturebelle.mail.MailsClient;
 import com.narturebelle.model.*;
 import com.narturebelle.repository.*;
 import com.narturebelle.security.FirebaseTokenVerifier;
@@ -46,7 +46,7 @@ class IdeaPoolTest {
     @Autowired private FeatureFlagRepository featureFlagRepository;
 
     @MockBean private FirebaseTokenVerifier firebaseTokenVerifier;
-    @MockBean private EmailSender emailSender;
+    @MockBean private MailsClient mailsClient;
 
     @BeforeEach
     void setUp() throws Exception {
@@ -156,8 +156,8 @@ class IdeaPoolTest {
         mockMvc.perform(post("/api/v1/ideas/" + id + "/vote").header("Authorization", bearer("paid2")))
                 .andExpect(jsonPath("$.paidVotes").value(2)).andExpect(jsonPath("$.goalReached").value(true));
 
-        ArgumentCaptor<EmailMessage> sent = ArgumentCaptor.forClass(EmailMessage.class);
-        verify(emailSender, times(2)).send(sent.capture()); // new idea + goal reached
+        ArgumentCaptor<OutgoingMail> sent = ArgumentCaptor.forClass(OutgoingMail.class);
+        verify(mailsClient, times(2)).send(sent.capture()); // new idea + goal reached
         assertTrue(sent.getAllValues().get(1).subject().contains("reached 2 paid votes"));
         assertNotNull(ideaRepository.findById(id).orElseThrow().getGoalReachedAt());
 
@@ -225,6 +225,6 @@ class IdeaPoolTest {
 
         mockMvc.perform(get("/api/v1/admin/ideas").header("Authorization", bearer("free")))
                 .andExpect(status().isForbidden());
-        verify(emailSender, atLeastOnce()).send(any());
+        verify(mailsClient, atLeastOnce()).send(any());
     }
 }

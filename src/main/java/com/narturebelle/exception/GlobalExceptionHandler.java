@@ -1,5 +1,6 @@
 package com.narturebelle.exception;
 
+import com.narturebelle.mail.MailsUnavailableException;
 import com.narturebelle.providers.exception.ProviderOnboardingException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
@@ -28,6 +29,13 @@ public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
+    @ExceptionHandler(MailsUnavailableException.class)
+    public ResponseEntity<Map<String, String>> handleMailsUnavailable(MailsUnavailableException e) {
+        log.error("Notifications service unavailable: {}", e.getCause().getClass().getSimpleName());
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(Map.of("code", "SERVICE_UNAVAILABLE", "message", "Please try again in a moment."));
+    }
+
     @ExceptionHandler(EmailNotVerifiedException.class)
     public ResponseEntity<Map<String, String>> handleEmailNotVerified(EmailNotVerifiedException e) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
@@ -44,6 +52,12 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, String>> handlePhoneInUse(PhoneInUseException e) {
         return ResponseEntity.badRequest()
                 .body(Map.of("code", "PHONE_IN_USE", "message", e.getMessage()));
+    }
+
+    @ExceptionHandler(AccountConflictException.class)
+    public ResponseEntity<Map<String, String>> handleAccountConflict(AccountConflictException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(Map.of("code", e.getCode(), "message", e.getMessage()));
     }
 
     @ExceptionHandler(ConsentRequiredException.class)

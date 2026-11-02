@@ -1,5 +1,6 @@
 package com.narturebelle.service;
 
+import com.narturebelle.mail.MailQueue;
 import com.narturebelle.dto.BookOnboardingCallRequest;
 import com.narturebelle.dto.CreateCallbackRequestRequest;
 import com.narturebelle.dto.CreateOnboardingCallSlotsRequest;
@@ -52,7 +53,7 @@ public class OnboardingService {
     private final OnboardingCompletionRepository onboardingCompletionRepository;
     private final OrderRepository orderRepository;
     private final UserRepository userRepository;
-    private final NotificationService notificationService;
+    private final MailQueue mailQueue;
     private final AuditService auditService;
     private final CoordinatorRepository coordinatorRepository;
     private final HealthProfileService healthProfileService;
@@ -66,7 +67,7 @@ public class OnboardingService {
                               OnboardingCompletionRepository onboardingCompletionRepository,
                               OrderRepository orderRepository,
                               UserRepository userRepository,
-                              NotificationService notificationService,
+                              MailQueue mailQueue,
                               AuditService auditService,
                               CoordinatorRepository coordinatorRepository,
                               HealthProfileService healthProfileService) {
@@ -79,7 +80,7 @@ public class OnboardingService {
         this.onboardingCompletionRepository = onboardingCompletionRepository;
         this.orderRepository = orderRepository;
         this.userRepository = userRepository;
-        this.notificationService = notificationService;
+        this.mailQueue = mailQueue;
         this.auditService = auditService;
         this.coordinatorRepository = coordinatorRepository;
         this.healthProfileService = healthProfileService;
@@ -260,7 +261,7 @@ public class OnboardingService {
 
         User user = userRepository.findById(userId).orElse(null);
         if (user != null && user.getEmail() != null) {
-            notificationService.sendTransactionalEmail(userId, "Your signed onboarding document",
+            mailQueue.sendTransactional(userId, "Your signed onboarding document",
                     "Thanks for signing \"" + document.getTitle() + "\" -- your signed copy will be sent to " + user.getEmail() + ".");
             saved.setEmailedAt(LocalDateTime.now());
             saved = onboardingDocumentSignatureRepository.save(saved);

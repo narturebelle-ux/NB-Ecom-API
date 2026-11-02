@@ -50,6 +50,8 @@ dependencies {
     // Testing (H2 is test-only now; Supabase backs dev/stage/prod)
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.security:spring-security-test'
+    testImplementation 'org.testcontainers:postgresql'
+    testImplementation 'org.testcontainers:junit-jupiter'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     testRuntimeOnly 'com.h2database:h2'
     mockitoAgent('net.bytebuddy:byte-buddy-agent') { transitive = false }
