@@ -41,3 +41,8 @@ Rules:
 - If `develop` moves on while a branch is open, bring it in with `git merge origin/develop` before the pull request.
 - `firebase-setup` and older branches (`master`, `codestepup`, `Added_Split_IO`) are history; don't start new work from them.
 - Note each feature in `HANDOFF.md` / `UI_INTEGRATION_GUIDE.md` on its own branch, so the docs ship with the code.
+
+## After a deployment
+
+Send one request, `GET /health`, and check that `status` is `UP` and `version` is the commit you deployed (owner decision D44). Don't
+send test logins, data calls or load tests. `GET /` gives the same answer; `GET /health/db` is for manual database checks only.

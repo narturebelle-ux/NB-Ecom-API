@@ -41,6 +41,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // Public: browsing/content + lead-gen forms (no user concept involved today) + health.
                         .requestMatchers(
+                                "/",
                                 "/health/**",
                                 "/api/v1/products/**",
                                 "/api/v1/checklists/**",
