@@ -46,6 +46,12 @@ public class GlobalExceptionHandler {
                 .body(Map.of("code", "PHONE_IN_USE", "message", e.getMessage()));
     }
 
+    @ExceptionHandler(AccountConflictException.class)
+    public ResponseEntity<Map<String, String>> handleAccountConflict(AccountConflictException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(Map.of("code", e.getCode(), "message", e.getMessage()));
+    }
+
     @ExceptionHandler(ConsentRequiredException.class)
     public ResponseEntity<Map<String, Object>> handleConsentRequired(ConsentRequiredException e) {
         Map<String, Object> body = new HashMap<>();
