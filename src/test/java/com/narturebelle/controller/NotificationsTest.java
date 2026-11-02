@@ -53,7 +53,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.mockito.Mockito.when;
 
 /** Covers the Care side of reminders (deciding what is due and checking consent) and the
- * payment-reconciliation dedupe job. Preferences and reminder rows are tested in NB-Ecom-Mails-API. */
+ * payment-reconciliation dedupe job. Preferences and reminder rows are tested in NB-Ecom-Notifications-API. */
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")

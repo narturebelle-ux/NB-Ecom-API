@@ -31,7 +31,7 @@ import java.util.List;
 
 /**
  * Decides which reminders are due from bookings and the journey timeline, per the roadmap's Phase 5 bullet, and tells
- * NB-Ecom-Mails-API, which owns the reminder rows, their wording and delivery. "Consent-checked": a user with pending
+ * NB-Ecom-Notifications-API, which owns the reminder rows, their wording and delivery. "Consent-checked": a user with pending
  * required consents is skipped entirely, same gate Journey/Dashboard already enforce. Only IDs leave this API, never
  * health details. Repeats are safe, so a failed run is simply covered by the next one.
  */

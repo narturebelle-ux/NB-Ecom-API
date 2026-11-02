@@ -86,11 +86,11 @@ records:
   share:
     max-expiry-days: ${RECORDS_SHARE_MAX_EXPIRY_DAYS:180}
 
-# NB-Ecom-Mails-API sends all email and owns reminders and notification preferences.
+# NB-Ecom-Notifications-API sends all email and owns reminders and notification preferences.
 mails:
   base-url: ${MAILS_API_URL:http://localhost:8082}
 
-# Keys the reminder dedupe hash. Stays in this API: never share it with NB-Ecom-Mails-API.
+# Keys the reminder dedupe hash. Stays in this API: never share it with NB-Ecom-Notifications-API.
 reminders:
   dedupe-secret: ${REMINDER_DEDUPE_SECRET:dev-only-reminder-dedupe-secret}
 

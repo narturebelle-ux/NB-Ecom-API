@@ -44,4 +44,4 @@ Rules:
 
 ## Email and notifications
 
-Email, reminders and notification preferences live in NB-Ecom-Mails-API. In prod and stage, set `MAILS_API_URL`, `INTERNAL_API_TOKEN` and `REMINDER_DEDUPE_SECRET`, or startup fails. Also set `CAREERS_ADMIN_URL` in stage. See `HANDOFF.md`.
+Email, reminders and notification preferences live in NB-Ecom-Notifications-API. In prod and stage, set `MAILS_API_URL`, `INTERNAL_API_TOKEN` and `REMINDER_DEDUPE_SECRET`, or startup fails. Also set `CAREERS_ADMIN_URL` in stage. See `HANDOFF.md`.

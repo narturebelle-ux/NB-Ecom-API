@@ -12,7 +12,7 @@ import org.springframework.web.client.RestClientException;
 import java.util.List;
 import java.util.Map;
 
-/** Private calls to NB-Ecom-Mails-API. */
+/** Private calls to NB-Ecom-Notifications-API. */
 @Component
 public class MailsClient {
 

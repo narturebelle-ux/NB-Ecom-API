@@ -4,7 +4,7 @@ import jakarta.persistence.*;
 
 import java.time.LocalDateTime;
 
-/** A send request waiting for NB-Ecom-Mails-API. See V31__outgoing_emails.sql. */
+/** A send request waiting for NB-Ecom-Notifications-API. See V31__outgoing_emails.sql. */
 @Entity
 @Table(name = "outgoing_emails")
 public class OutgoingEmail {

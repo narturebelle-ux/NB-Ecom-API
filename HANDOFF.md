@@ -237,7 +237,7 @@ Full request/response JSON (including the new error codes `ONBOARDING_CALL_SLOT_
 
 ## 11. Phase 5 — Reminders & notifications
 
-**Moved (2026-11-01):** `Reminder`, `NotificationPreference`, `NotificationService` and the reminder and preference endpoints described in this section now live in NB-Ecom-Mails-API. This API keeps only `ReminderGenerationJob`, which decides what is due and checks consent. BUG-16 is fixed there: a dismissed reminder stays dismissed.
+**Moved (2026-11-01):** `Reminder`, `NotificationPreference`, `NotificationService` and the reminder and preference endpoints described in this section now live in NB-Ecom-Notifications-API. This API keeps only `ReminderGenerationJob`, which decides what is due and checks consent. BUG-16 is fixed there: a dismissed reminder stays dismissed.
 
 Also on `firebase-setup`, right after Onboarding Part A. Per `NARTUREBELLE_ROADMAP.md`'s Phase 5. Decision log #9 (SMS/WhatsApp provider) is still blank, so this ships the same way Phase 2/3/4 shipped their own open decisions: real structure, a loudly-documented no-op where the real provider choice is missing.
 
@@ -262,7 +262,7 @@ Also on `firebase-setup`, right after Phase 5. Completes the Onboarding section 
 - **`OnboardingDocument` mirrors `ConsentDocument`'s exact shape and convention** (type/version/title/bodyMarkdown/effectiveAt/active) rather than inventing a new versioned-content pattern — this codebase already has one, seeded the same way (migration + `DataInitializer` fallback for the test profile), and legal-review-pending DRAFT text is already a precedent from Phase 1's consent documents.
 - **One document type seeded so far**: `ONBOARDING_AGREEMENT`. The product owner's "onboarding papers" wording is plural, so this may need more than one document type eventually — the enum is additive (a new value, no migration needed for the enum itself, just a new seeded row), so this isn't a structural limitation, just a current scope decision.
 - **Signing is idempotent via a check-then-insert plus a DB unique constraint backstop** (`(document_id, user_id)`), the same two-layer idempotency style as every other guarded write in this codebase. Re-signing returns the original signature unchanged — it does not update the `typedName` or re-trigger the email.
-- **(Moved to NB-Ecom-Mails-API.) `NotificationService.sendTransactionalEmail` is new and deliberately bypasses `notify()`'s usual rules**: no `Reminder` row gets created (a signed-document confirmation isn't something to dismiss from a reminder list), and it ignores the EMAIL channel preference (a user who signs a document should get their copy regardless of whether they've opted into general email notifications — their signing action is itself the relevant consent). It is still a `NoOp` today, same as every other EMAIL send in this codebase.
+- **(Moved to NB-Ecom-Notifications-API.) `NotificationService.sendTransactionalEmail` is new and deliberately bypasses `notify()`'s usual rules**: no `Reminder` row gets created (a signed-document confirmation isn't something to dismiss from a reminder list), and it ignores the EMAIL channel preference (a user who signs a document should get their copy regardless of whether they've opted into general email notifications — their signing action is itself the relevant consent). It is still a `NoOp` today, same as every other EMAIL send in this codebase.
 - **`POST /me/onboarding/complete`'s four checks are a judgment call, documented as one**: intake exists, (a booked call **OR** a callback request — deliberately either/or, since the callback-request fallback this session added is the sanctioned path when no slots exist and shouldn't be a dead end), at least one `PAID` order, and every active document signed. None of this is spelled out as a precise algorithm anywhere in the roadmap; it's derived from decision log #13's described sequence (intake → plan → payment → call → documents → onboarded) and the product owner's decision that *documents*, not payment or the call, is the trigger for "onboarded" — payment and the call are still enforced as prerequisites here because the roadmap's own sequence puts them earlier, and skipping that check would let a user mark themselves onboarded without ever paying.
 - **Completion is idempotent, the same way every other "mark complete" action in this codebase is**: a second call returns the existing `OnboardingCompletion` row rather than erroring or duplicating.
 - **Missing-steps reporting lists everything missing, not just the first failure** — a single 409 with a `missingSteps` array, so the UI can show the user everything left to do in one round-trip instead of a slow one-error-at-a-time loop.
@@ -279,7 +279,7 @@ Full request/response JSON (including the new error codes `ONBOARDING_DOCUMENT_N
 Product-owner requirement (relayed by the UI session): admins post/close roles, people apply with a résumé, and every application and every ideas/feedback message is emailed to hello@narturebelle.com "through our API". Contract in `UI_INTEGRATION_GUIDE.md` §14; migration V28; covered by `CareersTest`.
 
 - **Résumés live in Postgres** (`job_application_resumes`, bytea, ≤4 MB, under Vercel's 4.5 MB request limit), not Supabase Storage: prod still has placeholder Supabase credentials, so storage uploads would fail there. Admins download through the API (audited); there is no signed URL.
-- **Email goes through `com.narturebelle.mail.MailQueue`, sent by NB-Ecom-Mails-API (was `com.narturebelle.email.EmailSender`)**: `ResendEmailSender` when `RESEND_API_KEY` is set, otherwise `LoggingEmailSender` (logs the subject, delivers nothing). A failed send never fails a submission; `adminNotifiedAt` records whether the admin email really went out. Config: `RESEND_API_KEY`, `EMAIL_FROM` (default `NartureBelle <no-reply@narturebelle.com>`), `CAREERS_ADMIN_EMAIL` (default `hello@narturebelle.com`; support and care use support-care@narturebelle.com, which the API does not send to).
+- **Email goes through `com.narturebelle.mail.MailQueue`, sent by NB-Ecom-Notifications-API (was `com.narturebelle.email.EmailSender`)**: `ResendEmailSender` when `RESEND_API_KEY` is set, otherwise `LoggingEmailSender` (logs the subject, delivers nothing). A failed send never fails a submission; `adminNotifiedAt` records whether the admin email really went out. Config: `RESEND_API_KEY`, `EMAIL_FROM` (default `NartureBelle <no-reply@narturebelle.com>`), `CAREERS_ADMIN_EMAIL` (default `hello@narturebelle.com`; support and care use support-care@narturebelle.com, which the API does not send to).
 - **Spam control**: a honeypot field, magic-byte checks on the résumé, and an in-memory per-instance rate limiter (`RateLimiter`). `server.forward-headers-strategy: native` makes the client IP come from Cloud Run's `X-Forwarded-For`.
 
 **Open product-owner decision — retention:** applications and résumés are personal data, and nothing deletes them today. Decide how long to keep them (e.g. 12 months after the role closes) and whether rejected applicants' data goes sooner; then add a scheduled purge.
@@ -303,7 +303,7 @@ Owner decision, 1 Nov 2026 (`PROVIDERS_MERGE_BRIEF.md`). The code from `NB-Ecom-
 **Behaviour changes that now apply to this whole API, as the brief directs:**
 - A database failure while loading the signed-in user returns 503 `SERVICE_UNAVAILABLE`, not 401.
 - Audit reasons are cut to 255 characters instead of failing.
-- Resend calls have 5s connect and 10s read timeouts (now in NB-Ecom-Mails-API).
+- Resend calls have 5s connect and 10s read timeouts (now in NB-Ecom-Notifications-API).
 - A missing multipart part returns 400 `VALIDATION_FAILED` instead of 500.
 
 **Differences for the moved endpoints, from keeping this repo's error handler:**
@@ -326,13 +326,13 @@ Codes, statuses and `fields` for known routes are the same.
 
 ## Email and notifications: settings and personal data
 
-All email goes through `MailQueue`, which saves a row in `outgoing_emails` with the action and hands it to NB-Ecom-Mails-API after commit. Set these on this API:
+All email goes through `MailQueue`, which saves a row in `outgoing_emails` with the action and hands it to NB-Ecom-Notifications-API after commit. Set these on this API:
 
 | Setting | Required in | What it is |
 |---|---|---|
-| `MAILS_API_URL` | prod, stage | Address of NB-Ecom-Mails-API. Startup fails without it |
+| `MAILS_API_URL` | prod, stage | Address of NB-Ecom-Notifications-API. Startup fails without it |
 | `INTERNAL_API_TOKEN` | prod, stage | Private token shared with the other services, used on `/internal/**`. Startup fails without it |
 | `REMINDER_DEDUPE_SECRET` | prod, stage | Keys the reminder dedupe hash. Stays in this API. Startup fails without it |
 | `CAREERS_ADMIN_URL` | stage | Admin careers screen linked from application emails. Defaults to production elsewhere |
 
-**Account erasure:** when erasing an account by hand, also remove that person's rows from `outgoing_emails`. `PENDING` and `FAILED` rows hold addresses and message text, matched by `user_id` or `to_address`. Reminders and preferences are in NB-Ecom-Mails-API's care.
+**Account erasure:** when erasing an account by hand, also remove that person's rows from `outgoing_emails`. `PENDING` and `FAILED` rows hold addresses and message text, matched by `user_id` or `to_address`. Reminders and preferences are in NB-Ecom-Notifications-API's care.
