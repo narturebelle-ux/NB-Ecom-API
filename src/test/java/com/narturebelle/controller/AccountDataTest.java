@@ -92,6 +92,15 @@ class AccountDataTest {
         childRepository.save(child);
     }
 
+    /** The export writes an audit row, which real Postgres refuses in a read-only transaction. H2 doesn't, so only this catches it. */
+    @Test
+    void export_isNotReadOnly_becauseItWritesAnAuditRow() throws Exception {
+        org.springframework.transaction.annotation.Transactional transactional =
+                com.narturebelle.service.AccountDataService.class.getMethod("export", Long.class, java.util.Map.class)
+                        .getAnnotation(org.springframework.transaction.annotation.Transactional.class);
+        assertEquals(false, transactional.readOnly());
+    }
+
     @Test
     void export_isAnAttachmentWithOnlyTheCallersData() throws Exception {
         addChild(userA, "Asha");
@@ -129,15 +138,6 @@ class AccountDataTest {
         when(mailsClient.exportFor(userA)).thenReturn(java.util.Map.of("reminders", java.util.List.of()));
         mockMvc.perform(get("/api/v1/me/export").header("Authorization", "Bearer " + TOKEN_A))
                 .andExpect(status().isServiceUnavailable());
-    }
-
-    /** It writes an audit row, which a read-only transaction refuses on Postgres. H2 doesn't, so this checks directly. */
-    @Test
-    void export_isNotReadOnly() throws Exception {
-        org.springframework.transaction.annotation.Transactional tx = com.narturebelle.service.AccountDataService.class
-                .getMethod("export", Long.class, java.util.Map.class)
-                .getAnnotation(org.springframework.transaction.annotation.Transactional.class);
-        org.junit.jupiter.api.Assertions.assertFalse(tx.readOnly());
     }
 
     @Test

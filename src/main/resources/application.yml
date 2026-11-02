@@ -13,6 +13,8 @@ spring:
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 5
+      # Vercel can start several copies at once. Open connections as needed, so they do not fill the database's limit.
+      minimum-idle: 1
 
   # Common JPA / Hibernate Configuration
   jpa:
