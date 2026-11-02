@@ -68,6 +68,18 @@ No request body. This creates the user in our DB on first login, or updates emai
 
 This only happens **once**, at the moment the row is created. Calling `/auth/firebase` again on a later login (or even if the user's Google display name changes) will **never** overwrite `firstName`/`lastName` — once a user has (or has been given) a name, `PUT /users/me` is the only thing that changes it. `stage`/`dueDate` are still always `null` until set via `PUT /users/me` — those aren't derived from anything.
 
+**When a new Firebase account meets an email or phone we already hold** (for example the Firebase user was deleted and signed up again, which gives a new UID):
+
+| Situation | Result |
+|---|---|
+| Same email, verified on both the token and the account | `200`: the existing user is relinked to the new UID, all data kept, audited as `USER_FIREBASE_RELINKED` |
+| Same email, unverified on either side, or matching two accounts | `409 {"code":"ACCOUNT_EMAIL_CONFLICT","message":"..."}`: nothing changes |
+| No email match, but the token's phone is on another account | `409 {"code":"ACCOUNT_PHONE_CONFLICT","message":"..."}`: nothing is created |
+| Known UID, and the token's email or phone is on another account | `200`: signs in, keeping the stored value |
+| Rare: simultaneous sign-ins still colliding after 3 tries | `503 {"code":"SERVICE_UNAVAILABLE","message":"..."}`: try again |
+
+**The UI must show both 409s on the sign-in page** using the response's `message`, and not retry them automatically. Suggested action for `ACCOUNT_EMAIL_CONFLICT`: offer "send verification email" when the Firebase user's `emailVerified` is false.
+
 **Profile endpoints:**
 ```
 GET  /api/v1/users/me     — read own profile (just needs login)
