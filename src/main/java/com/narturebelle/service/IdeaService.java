@@ -3,8 +3,7 @@ package com.narturebelle.service;
 import com.narturebelle.dto.CreateIdeaRequest;
 import com.narturebelle.dto.IdeaResponse;
 import com.narturebelle.dto.IdeaStatusRequest;
-import com.narturebelle.email.EmailMessage;
-import com.narturebelle.email.EmailSender;
+import com.narturebelle.mail.MailQueue;
 import com.narturebelle.exception.IdeaException;
 import com.narturebelle.model.FeatureFlag;
 import com.narturebelle.model.Idea;
@@ -18,8 +17,6 @@ import com.narturebelle.repository.IdeaVoteRepository;
 import com.narturebelle.repository.UserRepository;
 import com.narturebelle.security.AuditService;
 import com.narturebelle.security.RateLimiter;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -43,7 +40,6 @@ import java.util.stream.Collectors;
 @Service
 public class IdeaService {
 
-    private static final Logger log = LoggerFactory.getLogger(IdeaService.class);
     static final String POOL_FLAG = "ideaPool";
     private static final List<IdeaStatus> VISIBLE = List.of(IdeaStatus.OPEN, IdeaStatus.UNDER_REVIEW, IdeaStatus.IMPLEMENTED);
 
@@ -52,13 +48,13 @@ public class IdeaService {
     private final UserRepository userRepository;
     private final FeatureFlagRepository featureFlagRepository;
     private final RateLimiter rateLimiter;
-    private final EmailSender emailSender;
+    private final MailQueue mailQueue;
     private final AuditService auditService;
     private final int voteGoal;
     private final String adminEmail;
 
     public IdeaService(IdeaRepository ideaRepository, IdeaVoteRepository ideaVoteRepository, UserRepository userRepository,
-                       FeatureFlagRepository featureFlagRepository, RateLimiter rateLimiter, EmailSender emailSender,
+                       FeatureFlagRepository featureFlagRepository, RateLimiter rateLimiter, MailQueue mailQueue,
                        AuditService auditService, @Value("${ideas.vote-goal}") int voteGoal,
                        @Value("${careers.admin-email}") String adminEmail) {
         this.ideaRepository = ideaRepository;
@@ -66,7 +62,7 @@ public class IdeaService {
         this.userRepository = userRepository;
         this.featureFlagRepository = featureFlagRepository;
         this.rateLimiter = rateLimiter;
-        this.emailSender = emailSender;
+        this.mailQueue = mailQueue;
         this.auditService = auditService;
         this.voteGoal = voteGoal;
         this.adminEmail = adminEmail;
@@ -125,9 +121,9 @@ public class IdeaService {
         idea.setStatus(IdeaStatus.OPEN);
         Idea saved = ideaRepository.save(idea);
         auditService.record("IDEA_SUBMITTED", "IDEA", String.valueOf(saved.getId()), "Member shared an idea");
-        sendQuietly(new EmailMessage(adminEmail, null, "New idea " + saved.number() + ": " + CareersService.oneLine(saved.getTitle()),
+        mailQueue.sendToAddress("IDEA_NEW", adminEmail, null, "New idea " + saved.number() + ": " + CareersService.oneLine(saved.getTitle()),
                 saved.getCategory().getLabel() + "\n\n" + saved.getTitle() + "\n\n" + saved.getDescription()
-                        + "\n\nMember id " + userId + ". Manage it in the admin ideas screen.", null));
+                        + "\n\nMember id " + userId + ". Manage it in the admin ideas screen.");
         return toResponses(List.of(saved), userId, true).get(0);
     }
 
@@ -153,8 +149,8 @@ public class IdeaService {
             idea.setGoalReachedAt(LocalDateTime.now());
             ideaRepository.save(idea);
             auditService.record("IDEA_GOAL_REACHED", "IDEA", String.valueOf(ideaId), "Idea reached its paid-vote goal");
-            sendQuietly(new EmailMessage(adminEmail, null, "Idea " + idea.number() + " reached " + voteGoal + " paid votes",
-                    idea.getTitle() + "\n\n" + idea.getDescription() + "\n\nIt's ready for review in the admin ideas screen.", null));
+            mailQueue.sendToAddress("IDEA_GOAL_REACHED", adminEmail, null, "Idea " + idea.number() + " reached " + voteGoal + " paid votes",
+                    idea.getTitle() + "\n\n" + idea.getDescription() + "\n\nIt's ready for review in the admin ideas screen.");
         }
         return response;
     }
@@ -238,13 +234,5 @@ public class IdeaService {
         if (user == null || user.getFirstName() == null || user.getFirstName().isBlank()) return "A NartureBelle mom";
         String last = user.getLastName() == null || user.getLastName().isBlank() ? "" : " " + user.getLastName().trim().charAt(0) + ".";
         return user.getFirstName().trim() + last;
-    }
-
-    private void sendQuietly(EmailMessage message) {
-        try {
-            emailSender.send(message);
-        } catch (Exception e) {
-            log.warn("Idea email failed ({}): {}", message.subject(), e.getMessage());
-        }
     }
 }

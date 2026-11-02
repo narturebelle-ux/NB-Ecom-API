@@ -539,6 +539,8 @@ Completion is idempotent — calling it again after success just returns the sam
 
 ## 12. Phase 5 contract — reminders & notifications
 
+**Moving to `NB-Ecom-Notifications-API` (branch `feature/move-notifications-to-mails`, not merged):** the reminder and preference endpoints below keep their paths and JSON, but are served by that API. The rules below are unchanged, except that a dismissed reminder no longer comes back (BUG-16).
+
 Verified live against the real stage Supabase DB (migration V12 applies cleanly on top of V1-V11). Covered by `NotificationsTest`: preference defaults/overrides, idempotent reminder generation, ownership on dismiss, consent-skip, and the payment-reconciliation dedupe.
 
 **New error codes**: none — these endpoints only 404/403, no new domain errors.

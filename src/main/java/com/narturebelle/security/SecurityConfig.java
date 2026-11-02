@@ -9,21 +9,24 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfigurationSource;
+import com.narturebelle.internal.InternalTokenFilter;
 
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
 
     private final FirebaseAuthenticationFilter firebaseAuthenticationFilter;
+    private final InternalTokenFilter internalTokenFilter;
     private final RestAuthenticationEntryPoint restAuthenticationEntryPoint;
     private final RestAccessDeniedHandler restAccessDeniedHandler;
     private final CorsConfigurationSource corsConfigurationSource;
 
-    public SecurityConfig(FirebaseAuthenticationFilter firebaseAuthenticationFilter,
+    public SecurityConfig(FirebaseAuthenticationFilter firebaseAuthenticationFilter, InternalTokenFilter internalTokenFilter,
                            RestAuthenticationEntryPoint restAuthenticationEntryPoint,
                            RestAccessDeniedHandler restAccessDeniedHandler,
                            CorsConfigurationSource corsConfigurationSource) {
         this.firebaseAuthenticationFilter = firebaseAuthenticationFilter;
+        this.internalTokenFilter = internalTokenFilter;
         this.restAuthenticationEntryPoint = restAuthenticationEntryPoint;
         this.restAccessDeniedHandler = restAccessDeniedHandler;
         this.corsConfigurationSource = corsConfigurationSource;
@@ -39,6 +42,8 @@ public class SecurityConfig {
                         .authenticationEntryPoint(restAuthenticationEntryPoint)
                         .accessDeniedHandler(restAccessDeniedHandler))
                 .authorizeHttpRequests(auth -> auth
+                        // Service-to-service calls, guarded by InternalTokenFilter rather than a user's sign-in.
+                        .requestMatchers("/internal/**").permitAll()
                         // Public: browsing/content + lead-gen forms (no user concept involved today) + health.
                         .requestMatchers(
                                 "/health/**",
@@ -80,6 +85,7 @@ public class SecurityConfig {
                         // Everything else (auth/firebase, users/me, users/{id}, future endpoints) needs a valid token.
                         .anyRequest().authenticated()
                 )
+                .addFilterBefore(internalTokenFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(firebaseAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();

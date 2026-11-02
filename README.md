@@ -41,3 +41,7 @@ Rules:
 - If `develop` moves on while a branch is open, bring it in with `git merge origin/develop` before the pull request.
 - `firebase-setup` and older branches (`master`, `codestepup`, `Added_Split_IO`) are history; don't start new work from them.
 - Note each feature in `HANDOFF.md` / `UI_INTEGRATION_GUIDE.md` on its own branch, so the docs ship with the code.
+
+## Email and notifications
+
+Email, reminders and notification preferences live in NB-Ecom-Notifications-API. In prod and stage, set `MAILS_API_URL`, `INTERNAL_API_TOKEN` and `REMINDER_DEDUPE_SECRET`, or startup fails. Also set `CAREERS_ADMIN_URL` in stage. See `HANDOFF.md`.

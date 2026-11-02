@@ -86,10 +86,10 @@ Errors are JSON `{"code": "...", "message": "..."}` — `401 UNAUTHENTICATED`, `
 | GET | `/api/v1/me/onboarding/documents` | Logged in + Consent | Onboarding Part B — DRAFT text pending legal review |
 | POST | `/api/v1/me/onboarding/documents/sign` | Logged in + Verified | Onboarding Part B — idempotent re-sign |
 | POST | `/api/v1/me/onboarding/complete` | Logged in + Verified | Onboarding Part B — idempotent; 409 lists missing steps |
-| GET | `/api/v1/me/reminders` | Logged in | Phase 5 — ACTIVE only, server-generated |
-| POST | `/api/v1/me/reminders/{id}/dismiss` | Logged in | Phase 5 — 403 if it isn't yours |
-| GET | `/api/v1/me/notification-preferences` | Logged in | Phase 5 — IN_APP defaults on, others off |
-| PUT | `/api/v1/me/notification-preferences/{channel}` | Logged in | Phase 5 — EMAIL/SMS/WHATSAPP log intent only, no real send |
+| GET | `/api/v1/me/reminders` | Logged in | Phase 5 — ACTIVE only, server-generated. Moved to NB-Ecom-Notifications-API |
+| POST | `/api/v1/me/reminders/{id}/dismiss` | Logged in | Phase 5 — 403 if it isn't yours. Moved to NB-Ecom-Notifications-API |
+| GET | `/api/v1/me/notification-preferences` | Logged in | Phase 5 — IN_APP defaults on, others off. Moved to NB-Ecom-Notifications-API |
+| PUT | `/api/v1/me/notification-preferences/{channel}` | Logged in | Phase 5 — EMAIL/SMS/WHATSAPP log intent only, no real send. Moved to NB-Ecom-Notifications-API |
 | `/api/v1/admin/**` | Admin | feature flags, order refunds, finance view, provider onboarding |
 
 Cart (pre-checkout) still isn't implemented — Phase 2 went straight from plan selection to order creation, no intermediate cart resource.

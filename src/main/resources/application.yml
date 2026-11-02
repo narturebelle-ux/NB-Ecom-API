@@ -86,16 +86,23 @@ records:
   share:
     max-expiry-days: ${RECORDS_SHARE_MAX_EXPIRY_DAYS:180}
 
-# Email (careers applications, feedback). Without RESEND_API_KEY, LoggingEmailSender only logs and
-# nothing is delivered; submissions are still saved and visible to admins.
-email:
-  from: ${EMAIL_FROM:NartureBelle <no-reply@narturebelle.com>}
-  resend:
-    api-key: ${RESEND_API_KEY:}
+# NB-Ecom-Notifications-API sends all email and owns reminders and notification preferences.
+mails:
+  base-url: ${MAILS_API_URL:http://localhost:8082}
+
+# Keys the reminder dedupe hash. Stays in this API: never share it with NB-Ecom-Notifications-API.
+reminders:
+  dedupe-secret: ${REMINDER_DEDUPE_SECRET:dev-only-reminder-dedupe-secret}
+
+# The private token shared with the other NartureBelle services. Empty means every /internal call is refused.
+internal:
+  api-token: ${INTERNAL_API_TOKEN:}
 
 careers:
   # Careers applications and ideas/feedback go to the hello@ mailbox (product-owner decision, 2026-10-30).
   admin-email: ${CAREERS_ADMIN_EMAIL:hello@narturebelle.com}
+  # Where the team downloads a résumé after signing in. Application emails link here instead of attaching the file.
+  admin-url: ${CAREERS_ADMIN_URL:https://narturebelle.com/admin/careers}
 
 # Idea pool: paid members' votes an idea needs before it is considered for implementation.
 ideas:

@@ -1,8 +1,8 @@
 package com.narturebelle.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.narturebelle.email.EmailMessage;
-import com.narturebelle.email.EmailSender;
+import com.narturebelle.mail.OutgoingMail;
+import com.narturebelle.mail.MailsClient;
 import com.narturebelle.model.FeedbackMessage;
 import com.narturebelle.model.Role;
 import com.narturebelle.model.User;
@@ -58,7 +58,7 @@ class CareersTest {
     @Autowired private FeedbackMessageRepository feedbackMessageRepository;
 
     @MockBean private FirebaseTokenVerifier firebaseTokenVerifier;
-    @MockBean private EmailSender emailSender;
+    @MockBean private MailsClient mailsClient;
 
     private Long userId;
     private String ip;
@@ -77,7 +77,7 @@ class CareersTest {
                 .thenReturn(new VerifiedFirebaseToken("uid-careers-admin", "careers-admin@example.com", true, null, null));
         when(firebaseTokenVerifier.verify(TOKEN_USER))
                 .thenReturn(new VerifiedFirebaseToken("uid-careers-user", "careers-user@example.com", true, null, null));
-        when(emailSender.delivers()).thenReturn(true);
+        when(mailsClient.send(any())).thenReturn(true);
         ip = "203.0.113." + IP.getAndIncrement();
     }
 
@@ -137,14 +137,14 @@ class CareersTest {
                 .andExpect(jsonPath("$.id").isNumber())
                 .andExpect(jsonPath("$.submittedAt").exists());
 
-        ArgumentCaptor<EmailMessage> sent = ArgumentCaptor.forClass(EmailMessage.class);
-        verify(emailSender, times(2)).send(sent.capture());
-        EmailMessage toAdmin = sent.getAllValues().get(0);
+        ArgumentCaptor<OutgoingMail> sent = ArgumentCaptor.forClass(OutgoingMail.class);
+        verify(mailsClient, times(2)).send(sent.capture());
+        OutgoingMail toAdmin = sent.getAllValues().get(0);
         assertEquals("hello@narturebelle.com", toAdmin.to());
         assertEquals("asha@example.com", toAdmin.replyTo());
         assertTrue(toAdmin.text().contains("+91 98450 12345"));
-        assertEquals("Asha CV.pdf", toAdmin.attachments().get(0).fileName());
-        assertArrayEquals(PDF, toAdmin.attachments().get(0).content());
+        assertTrue(toAdmin.text().contains("Asha CV.pdf"));
+        assertTrue(toAdmin.text().contains("/admin/careers"));
         assertEquals("asha@example.com", sent.getAllValues().get(1).to()); // the applicant's confirmation
 
         mockMvc.perform(get("/api/v1/admin/careers/jobs").header("Authorization", "Bearer " + TOKEN_ADMIN))
@@ -223,7 +223,7 @@ class CareersTest {
                 .andExpect(status().isCreated());
         assertEquals(0, jobApplicationRepository.count());
         assertEquals(0, feedbackMessageRepository.count());
-        verify(emailSender, never()).send(any());
+        verify(mailsClient, never()).send(any());
     }
 
     @Test
@@ -239,7 +239,7 @@ class CareersTest {
 
     @Test
     void emailFailure_stillSavesTheApplication() throws Exception {
-        doThrow(new RuntimeException("provider down")).when(emailSender).send(any());
+        when(mailsClient.send(any())).thenThrow(new RuntimeException("provider down"));
         long jobId = postJob("Coordinator");
         mockMvc.perform(application(jobId, resume("cv.pdf", PDF), "c@example.com")).andExpect(status().isCreated());
         assertNull(jobApplicationRepository.findAll().get(0).getAdminNotifiedAt());
@@ -264,8 +264,8 @@ class CareersTest {
         assertTrue(saved.stream().anyMatch(f -> userId.equals(f.getUserId())));
         assertTrue(saved.stream().anyMatch(f -> f.getUserId() == null && f.getAdminNotifiedAt() != null));
 
-        ArgumentCaptor<EmailMessage> sent = ArgumentCaptor.forClass(EmailMessage.class);
-        verify(emailSender, times(2)).send(sent.capture());
+        ArgumentCaptor<OutgoingMail> sent = ArgumentCaptor.forClass(OutgoingMail.class);
+        verify(mailsClient, times(2)).send(sent.capture());
         assertEquals("hello@narturebelle.com", sent.getAllValues().get(0).to());
         assertEquals("meera@example.com", sent.getAllValues().get(0).replyTo());
         assertTrue(sent.getAllValues().get(0).text().contains("Add Tamil videos"));

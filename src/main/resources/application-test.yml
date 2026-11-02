@@ -48,3 +48,10 @@ features:
 logging:
   level:
     com.narturebelle: DEBUG
+
+# Email rows send inline, so tests can assert on them without waiting for the background pool.
+mails:
+  async-dispatch: false
+
+internal:
+  api-token: test-internal-token
