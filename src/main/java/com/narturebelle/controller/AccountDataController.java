@@ -3,6 +3,7 @@ package com.narturebelle.controller;
 import com.narturebelle.dto.CreateDeletionRequestRequest;
 import com.narturebelle.dto.DeletionRequestResponse;
 import com.narturebelle.exception.UserProfileNotFoundException;
+import com.narturebelle.mail.MailsClient;
 import com.narturebelle.security.AuthorizationService;
 import com.narturebelle.security.FirebaseUserPrincipal;
 import com.narturebelle.service.AccountDataService;
@@ -24,17 +25,20 @@ import java.time.LocalDate;
 public class AccountDataController {
 
     private final AccountDataService accountDataService;
+    private final MailsClient mailsClient;
     private final AuthorizationService authorizationService;
 
-    public AccountDataController(AccountDataService accountDataService, AuthorizationService authorizationService) {
+    public AccountDataController(AccountDataService accountDataService, MailsClient mailsClient, AuthorizationService authorizationService) {
         this.accountDataService = accountDataService;
+        this.mailsClient = mailsClient;
         this.authorizationService = authorizationService;
     }
 
     @GetMapping("/export")
     public ResponseEntity<byte[]> export() {
         Long userId = requireUserId(authorizationService.currentPrincipal());
-        byte[] body = accountDataService.export(userId);
+        // Mails owns reminders and preferences. If it's down the export fails with a 503, never quietly leaves them out.
+        byte[] body = accountDataService.export(userId, mailsClient.exportFor(userId));
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_JSON)
                 .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment()

@@ -1,7 +1,6 @@
 package com.narturebelle.service;
 
-import com.narturebelle.email.EmailMessage;
-import com.narturebelle.email.EmailSender;
+import com.narturebelle.mail.MailQueue;
 import com.narturebelle.exception.ReferralException;
 import com.narturebelle.model.*;
 import com.narturebelle.repository.*;
@@ -44,7 +43,7 @@ public class ReferralService {
     private final PlanVersionRepository planVersionRepository;
     private final EntitlementService entitlementService;
     private final UserRepository userRepository;
-    private final EmailSender emailSender;
+    private final MailQueue mailQueue;
     private final AuditService auditService;
     private final TransactionTemplate requiresNew;
 
@@ -52,7 +51,7 @@ public class ReferralService {
                            ReferralRewardRepository referralRewardRepository, OrderRepository orderRepository,
                            PlanRepository planRepository, PlanVersionRepository planVersionRepository,
                            EntitlementService entitlementService, UserRepository userRepository,
-                           EmailSender emailSender, AuditService auditService,
+                           MailQueue mailQueue, AuditService auditService,
                            PlatformTransactionManager transactionManager) {
         this.referralCodeRepository = referralCodeRepository;
         this.referralRepository = referralRepository;
@@ -62,7 +61,7 @@ public class ReferralService {
         this.planVersionRepository = planVersionRepository;
         this.entitlementService = entitlementService;
         this.userRepository = userRepository;
-        this.emailSender = emailSender;
+        this.mailQueue = mailQueue;
         this.auditService = auditService;
         this.requiresNew = new TransactionTemplate(transactionManager);
         this.requiresNew.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
@@ -123,20 +122,18 @@ public class ReferralService {
      */
     public void onOrderPaid(Order order) {
         if (order.getPrice() == null || order.getPrice().signum() <= 0) return;
-        Long rewarded;
         try {
-            rewarded = requiresNew.execute(status -> creditReferral(order));
+            requiresNew.executeWithoutResult(status -> creditReferral(order));
         } catch (Exception e) {
             log.warn("Referral credit failed for order {}: {}", order.getId(), e.getMessage());
             return;
         }
-        if (rewarded != null) emailReward(rewarded);
     }
 
-    /** Returns the referrer's user id if this payment earned her the free Premium plan, else null. */
-    private Long creditReferral(Order order) {
+    /** Grants and emails the free Premium plan if this payment earned it, all in one transaction. */
+    private void creditReferral(Order order) {
         Referral referral = referralRepository.findByReferredUserId(order.getUserId()).orElse(null);
-        if (referral == null || referral.getQualifiedAt() != null) return null;
+        if (referral == null || referral.getQualifiedAt() != null) return;
         referral.setQualifiedAt(LocalDateTime.now());
         referralRepository.save(referral);
         auditService.record("REFERRAL_QUALIFIED", "USER", String.valueOf(referral.getReferrerUserId()), "A referred friend bought a plan");
@@ -145,9 +142,8 @@ public class ReferralService {
         if (referralRepository.countByReferrerUserIdAndQualifiedAtIsNotNull(referrer) >= TARGET
                 && !referralRewardRepository.existsById(referrer)) {
             grantPremium(referrer);
-            return referrer;
+            emailReward(referrer);
         }
-        return null;
     }
 
     /** Runs inside creditReferral's transaction: the order, the reward row and the entitlements commit together;
@@ -174,16 +170,10 @@ public class ReferralService {
     }
 
     private void emailReward(Long userId) {
-        userRepository.findById(userId).map(User::getEmail).filter(e -> e != null && !e.isBlank()).ifPresent(email -> {
-            try {
-                emailSender.send(new EmailMessage(email, null, "You've earned a free NartureBelle Premium plan!",
-                        "Five friends joined NartureBelle through your invite -- thank you for spreading the care.\n\n"
-                                + "Your free Premium plan is active now, with every session it includes. "
-                                + "Open NartureBelle to start booking.\n\n-- The NartureBelle team", null));
-            } catch (Exception e) {
-                log.warn("Referral reward email failed for user {}: {}", userId, e.getMessage());
-            }
-        });
+        mailQueue.sendToUser("REFERRAL_REWARD", userId, "You've earned a free NartureBelle Premium plan!",
+                "Five friends joined NartureBelle through your invite -- thank you for spreading the care.\n\n"
+                        + "Your free Premium plan is active now, with every session it includes. "
+                        + "Open NartureBelle to start booking.\n\n-- The NartureBelle team");
     }
 
     private boolean purchased(Long userId) {

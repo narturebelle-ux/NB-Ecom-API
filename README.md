@@ -46,3 +46,7 @@ Rules:
 
 Send one request, `GET /health`, and check that `status` is `UP` and `version` is the commit you deployed (owner decision D44). Don't
 send test logins, data calls or load tests. `GET /` gives the same answer; `GET /health/db` is for manual database checks only.
+
+## Email and notifications
+
+Email, reminders and notification preferences live in NB-Ecom-Notifications-API. In prod and stage, set `MAILS_API_URL`, `INTERNAL_API_TOKEN` and `REMINDER_DEDUPE_SECRET`, or startup fails. Also set `CAREERS_ADMIN_URL` in stage. See `HANDOFF.md`.

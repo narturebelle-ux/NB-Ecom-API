@@ -51,6 +51,7 @@ class AccountDataTest {
     @Autowired private AccountDeletionRequestRepository accountDeletionRequestRepository;
 
     @MockBean private FirebaseTokenVerifier firebaseTokenVerifier;
+    @MockBean private com.narturebelle.mail.MailsClient mailsClient;
 
     private Long userA;
     private Long userB;
@@ -95,7 +96,7 @@ class AccountDataTest {
     @Test
     void export_isNotReadOnly_becauseItWritesAnAuditRow() throws Exception {
         org.springframework.transaction.annotation.Transactional transactional =
-                com.narturebelle.service.AccountDataService.class.getMethod("export", Long.class)
+                com.narturebelle.service.AccountDataService.class.getMethod("export", Long.class, java.util.Map.class)
                         .getAnnotation(org.springframework.transaction.annotation.Transactional.class);
         assertEquals(false, transactional.readOnly());
     }
@@ -104,6 +105,7 @@ class AccountDataTest {
     void export_isAnAttachmentWithOnlyTheCallersData() throws Exception {
         addChild(userA, "Asha");
         addChild(userB, "Someone else");
+        when(mailsClient.exportFor(userA)).thenReturn(java.util.Map.of("reminders", java.util.List.of(), "notificationPreferences", java.util.List.of(), "unexpected", "must not be exported"));
 
         MvcResult result = mockMvc.perform(get("/api/v1/me/export").header("Authorization", "Bearer " + TOKEN_A))
                 .andExpect(status().isOk())
@@ -112,10 +114,30 @@ class AccountDataTest {
         assertTrue(result.getResponse().getHeader("Content-Disposition").startsWith("attachment; filename=\"narturebelle-export-"));
         JsonNode export = objectMapper.readTree(result.getResponse().getContentAsByteArray());
         assertEquals("account-a@example.com", export.get("profile").get("email").asText());
+        assertTrue(export.has("reminders"));
+        assertTrue(export.has("notificationPreferences"));
+        org.junit.jupiter.api.Assertions.assertFalse(export.has("unexpected"));
         assertEquals(1, export.get("children").size());
         assertEquals("Asha", export.get("children").get(0).get("name").asText());
         assertTrue(export.has("healthRecords"));
         assertTrue(export.has("orders"));
+    }
+
+    @Test
+    void export_failsWithA503_whenMailsIsDown_ratherThanLeavingDataOut() throws Exception {
+        when(mailsClient.exportFor(userA)).thenThrow(new com.narturebelle.mail.MailsUnavailableException(new RuntimeException("down")));
+        mockMvc.perform(get("/api/v1/me/export").header("Authorization", "Bearer " + TOKEN_A))
+                .andExpect(status().isServiceUnavailable());
+    }
+
+    @Test
+    void export_failsWithA503_whenMailsGivesNoOrAPartialAnswer() throws Exception {
+        when(mailsClient.exportFor(userA)).thenReturn(null);
+        mockMvc.perform(get("/api/v1/me/export").header("Authorization", "Bearer " + TOKEN_A))
+                .andExpect(status().isServiceUnavailable());
+        when(mailsClient.exportFor(userA)).thenReturn(java.util.Map.of("reminders", java.util.List.of()));
+        mockMvc.perform(get("/api/v1/me/export").header("Authorization", "Bearer " + TOKEN_A))
+                .andExpect(status().isServiceUnavailable());
     }
 
     @Test

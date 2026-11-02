@@ -15,6 +15,7 @@ import com.narturebelle.model.User;
 import com.narturebelle.repository.*;
 import com.narturebelle.security.AuditService;
 import org.springframework.stereotype.Service;
+import com.narturebelle.mail.MailsUnavailableException;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
@@ -45,8 +46,6 @@ public class AccountDataService {
     private final BookingRepository bookingRepository;
     private final HealthRecordRepository healthRecordRepository;
     private final RecordShareRepository recordShareRepository;
-    private final ReminderRepository reminderRepository;
-    private final NotificationPreferenceRepository notificationPreferenceRepository;
     private final ChildRepository childRepository;
     private final ChildVaccinationRepository childVaccinationRepository;
     private final HospitalReferralRepository hospitalReferralRepository;
@@ -72,8 +71,6 @@ public class AccountDataService {
                               BookingRepository bookingRepository,
                               HealthRecordRepository healthRecordRepository,
                               RecordShareRepository recordShareRepository,
-                              ReminderRepository reminderRepository,
-                              NotificationPreferenceRepository notificationPreferenceRepository,
                               ChildRepository childRepository,
                               ChildVaccinationRepository childVaccinationRepository,
                               HospitalReferralRepository hospitalReferralRepository,
@@ -98,8 +95,6 @@ public class AccountDataService {
         this.bookingRepository = bookingRepository;
         this.healthRecordRepository = healthRecordRepository;
         this.recordShareRepository = recordShareRepository;
-        this.reminderRepository = reminderRepository;
-        this.notificationPreferenceRepository = notificationPreferenceRepository;
         this.childRepository = childRepository;
         this.childVaccinationRepository = childVaccinationRepository;
         this.hospitalReferralRepository = hospitalReferralRepository;
@@ -116,8 +111,13 @@ public class AccountDataService {
      * transaction so element collections load. Health-record files themselves aren't included --
      * only their metadata; the files stay downloadable through /records/{id}/download-url.
      */
+    /** Not read-only: it writes the audit row. mailsData is fetched by the caller first, so no database connection
+     * is held while waiting on that service. */
     @Transactional
-    public byte[] export(Long userId) {
+    public byte[] export(Long userId, Map<String, Object> mailsData) {
+        if (mailsData == null || !mailsData.containsKey("reminders") || !mailsData.containsKey("notificationPreferences")) {
+            throw new MailsUnavailableException(new IllegalStateException("Incomplete answer from the notifications service"));
+        }
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UserProfileNotFoundException("User profile not found."));
 
@@ -159,8 +159,8 @@ public class AccountDataService {
         export.put("healthRecords", records);
         export.put("recordShares", records.stream()
                 .flatMap(r -> recordShareRepository.findByRecordIdOrderByCreatedAtDesc(r.getId()).stream()).toList());
-        export.put("reminders", reminderRepository.findByUserIdOrderByCreatedAtDesc(userId));
-        export.put("notificationPreferences", notificationPreferenceRepository.findByUserId(userId));
+        export.put("reminders", mailsData.get("reminders"));
+        export.put("notificationPreferences", mailsData.get("notificationPreferences"));
         export.put("children", children);
         export.put("childVaccinations", children.stream()
                 .flatMap(c -> childVaccinationRepository.findByChildId(c.getId()).stream()).toList());

@@ -2,8 +2,7 @@ package com.narturebelle.service;
 
 import com.narturebelle.dto.JobApplicationForm;
 import com.narturebelle.dto.JobRequest;
-import com.narturebelle.email.EmailMessage;
-import com.narturebelle.email.EmailSender;
+import com.narturebelle.mail.MailQueue;
 import com.narturebelle.exception.CareersException;
 import com.narturebelle.model.JobApplication;
 import com.narturebelle.model.JobApplicationResume;
@@ -14,8 +13,6 @@ import com.narturebelle.repository.JobApplicationResumeRepository;
 import com.narturebelle.repository.JobPostingRepository;
 import com.narturebelle.security.AuditService;
 import com.narturebelle.security.RateLimiter;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -35,7 +32,6 @@ import java.util.Map;
 @Service
 public class CareersService {
 
-    private static final Logger log = LoggerFactory.getLogger(CareersService.class);
 
     /** 4 MB: Vercel rejects any request body over 4.5 MB, and the form fields ride along with the file. */
     static final long MAX_RESUME_BYTES = 4L * 1024 * 1024;
@@ -53,20 +49,22 @@ public class CareersService {
     private final JobPostingRepository jobPostingRepository;
     private final JobApplicationRepository jobApplicationRepository;
     private final JobApplicationResumeRepository resumeRepository;
-    private final EmailSender emailSender;
+    private final MailQueue mailQueue;
+    private final String adminUrl;
     private final RateLimiter rateLimiter;
     private final AuditService auditService;
     private final TransactionTemplate transactionTemplate;
     private final String adminEmail;
 
     public CareersService(JobPostingRepository jobPostingRepository, JobApplicationRepository jobApplicationRepository,
-                          JobApplicationResumeRepository resumeRepository, EmailSender emailSender, RateLimiter rateLimiter,
+                          JobApplicationResumeRepository resumeRepository, MailQueue mailQueue, @Value("${careers.admin-url}") String adminUrl, RateLimiter rateLimiter,
                           AuditService auditService, TransactionTemplate transactionTemplate,
                           @Value("${careers.admin-email}") String adminEmail) {
         this.jobPostingRepository = jobPostingRepository;
         this.jobApplicationRepository = jobApplicationRepository;
         this.resumeRepository = resumeRepository;
-        this.emailSender = emailSender;
+        this.mailQueue = mailQueue;
+        this.adminUrl = adminUrl;
         this.rateLimiter = rateLimiter;
         this.auditService = auditService;
         this.transactionTemplate = transactionTemplate;
@@ -117,16 +115,15 @@ public class CareersService {
         JobApplication saved = transactionTemplate.execute(status -> {
             JobApplication row = jobApplicationRepository.save(application);
             resumeRepository.save(new JobApplicationResume(row.getId(), content));
+            notifyAdmin(job, row);
+            mailQueue.sendToAddress("JOB_APPLICATION_CONFIRMATION", row.getEmail(), null, "We received your application -- " + oneLine(job.getTitle()),
+                    "Hi " + row.getFullName() + ",\n\nThank you for applying for " + job.getTitle()
+                            + " at NartureBelle. Our team will review your application and get back to you if it's a match.\n\n"
+                            + "-- The NartureBelle team");
             return row;
         });
         auditService.record("JOB_APPLICATION_SUBMITTED", "JOB_APPLICATION", String.valueOf(saved.getId()),
                 "Application received for job " + jobId);
-
-        notifyAdmin(job, saved, content);
-        sendQuietly(new EmailMessage(saved.getEmail(), null, "We received your application -- " + oneLine(job.getTitle()),
-                "Hi " + saved.getFullName() + ",\n\nThank you for applying for " + job.getTitle()
-                        + " at NartureBelle. Our team will review your application and get back to you if it's a match.\n\n"
-                        + "-- The NartureBelle team", null));
         return saved;
     }
 
@@ -255,7 +252,7 @@ public class CareersService {
         return name.isEmpty() || name.startsWith(".") ? "resume." + extension : name;
     }
 
-    private void notifyAdmin(JobPosting job, JobApplication a, byte[] resume) {
+    private void notifyAdmin(JobPosting job, JobApplication a) {
         String text = "New application for " + job.getTitle() + " (job #" + job.getId() + ")\n\n"
                 + "Name: " + a.getFullName() + "\n"
                 + "Email: " + a.getEmail() + "\n"
@@ -266,26 +263,10 @@ public class CareersService {
                 + "Years of experience: " + (a.getYearsExperience() == null ? "-" : a.getYearsExperience()) + "\n"
                 + "Submitted: " + a.getSubmittedAt() + "\n\n"
                 + "Cover note:\n" + orDash(a.getCoverNote()) + "\n\n"
-                + "Résumé attached: " + a.getResumeFileName() + "\n"
-                + "Application id " + a.getId() + " -- also visible in the admin careers screen.";
-        boolean sent = sendQuietly(new EmailMessage(adminEmail, a.getEmail(),
-                "New application: " + oneLine(job.getTitle()) + " -- " + oneLine(a.getFullName()), text,
-                List.of(new EmailMessage.Attachment(a.getResumeFileName(), resume))));
-        if (sent) {
-            a.setAdminNotifiedAt(LocalDateTime.now());
-            jobApplicationRepository.save(a);
-        }
-    }
-
-    /** True only if the email really went out. A failure never fails the submission -- it's already saved. */
-    boolean sendQuietly(EmailMessage message) {
-        try {
-            emailSender.send(message);
-            return emailSender.delivers();
-        } catch (Exception e) {
-            log.warn("Email send failed ({}): {}", message.subject(), e.getMessage());
-            return false;
-        }
+                + "Résumé: " + a.getResumeFileName() + " -- sign in to download it: " + adminUrl + "\n"
+                + "Application id " + a.getId() + ".";
+        mailQueue.sendJobApplicationNotice(a.getId(), adminEmail, a.getEmail(),
+                "New application: " + oneLine(job.getTitle()) + " -- " + oneLine(a.getFullName()), text);
     }
 
     static String oneLine(String s) {
