@@ -16,7 +16,8 @@ Errors are JSON `{"code": "...", "message": "..."}` — `401 UNAUTHENTICATED`, `
 
 | Method | Path | Access | Notes |
 |---|---|---|---|
-| GET | `/health/db` | Public | DB connectivity check |
+| GET | `/health`, `/` | Public | Application status: `{"status":"UP","version":"<commit>"}`, no database call. The only request to send after a deployment (D44) |
+| GET | `/health/db` | Public | DB connectivity check, for manual checks only |
 | GET | `/api/v1/products` | Public | query by `stage`/`tier` |
 | GET | `/api/v1/products/{id}` | Public | |
 | GET | `/api/v1/products/stage/{stage}` | Public | |
