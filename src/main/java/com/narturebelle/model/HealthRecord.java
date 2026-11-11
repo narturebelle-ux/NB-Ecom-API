@@ -5,10 +5,11 @@ import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
 /**
- * Metadata only — the actual file bytes live in Supabase Storage, never here. storageObjectPath is
- * a random key (no filename in it) so the storage path itself never leaks the document name into
- * logs/traces. scanStatus is always NOT_SCANNED today — no real malware scanner is integrated yet,
- * see NoOpMalwareScanner.
+ * Metadata only — the actual file bytes live in Supabase Storage or AWS S3 (storageProvider), never
+ * here. storageObjectPath is a random key (no filename in it) so the storage path itself never leaks
+ * the document name into logs/traces. Supabase files stay NOT_SCANNED (NoOpMalwareScanner); S3 files
+ * are PENDING until GuardDuty tags them. removalAt is set for videos only: the moment the S3 lifecycle
+ * rule moves them to trash (D49).
  */
 @Entity
 @Table(name = "health_records")
@@ -45,6 +46,16 @@ public class HealthRecord {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private ScanVerdict scanStatus;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 32)
+    private com.narturebelle.storage.StorageBackend storageProvider = com.narturebelle.storage.StorageBackend.SUPABASE;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 32)
+    private FileKind kind = FileKind.DOCUMENT;
+
+    private LocalDateTime removalAt;
 
     @Column(nullable = false)
     private LocalDateTime createdAt;
@@ -95,6 +106,15 @@ public class HealthRecord {
 
     public ScanVerdict getScanStatus() { return scanStatus; }
     public void setScanStatus(ScanVerdict scanStatus) { this.scanStatus = scanStatus; }
+
+    public com.narturebelle.storage.StorageBackend getStorageProvider() { return storageProvider; }
+    public void setStorageProvider(com.narturebelle.storage.StorageBackend storageProvider) { this.storageProvider = storageProvider; }
+
+    public FileKind getKind() { return kind; }
+    public void setKind(FileKind kind) { this.kind = kind; }
+
+    public LocalDateTime getRemovalAt() { return removalAt; }
+    public void setRemovalAt(LocalDateTime removalAt) { this.removalAt = removalAt; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }

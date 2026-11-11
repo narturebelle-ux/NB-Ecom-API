@@ -44,6 +44,14 @@ dependencies {
     // Dev-only hot restart/LiveReload — excluded from the built jar (bootJar) automatically.
     developmentOnly 'org.springframework.boot:spring-boot-devtools'
 
+    // AWS S3 file storage (F9-S19, D48). URLConnection HTTP client only: no Netty or Apache client in the jar.
+    implementation platform('software.amazon.awssdk:bom:2.55.16')
+    implementation('software.amazon.awssdk:s3') {
+        exclude group: 'software.amazon.awssdk', module: 'apache-client'
+        exclude group: 'software.amazon.awssdk', module: 'netty-nio-client'
+    }
+    implementation 'software.amazon.awssdk:url-connection-client'
+
     // Postgres Database (all environments — Supabase)
     runtimeOnly 'org.postgresql:postgresql'
 

@@ -200,6 +200,12 @@ public class GlobalExceptionHandler {
                 .body(Map.of("code", "RECORD_UPLOAD_NOT_CONFIRMED", "message", e.getMessage()));
     }
 
+    @ExceptionHandler(RecordFileException.class)
+    public ResponseEntity<Map<String, String>> handleRecordFile(RecordFileException e) {
+        return ResponseEntity.status(e.getStatus())
+                .body(Map.of("code", e.getCode(), "message", e.getMessage()));
+    }
+
     @ExceptionHandler(RecordNotAllowedException.class)
     public ResponseEntity<Map<String, String>> handleRecordNotAllowed(RecordNotAllowedException e) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
