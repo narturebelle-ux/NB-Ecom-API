@@ -47,10 +47,13 @@ public class MailsClient {
         return result != null && result.delivered();
     }
 
-    public void sendTransactional(Long userId, String title, String body) {
-        sends.post().uri("/internal/v1/notifications/transactional")
-                .contentType(MediaType.APPLICATION_JSON).body(Map.of("userId", userId, "title", title, "body", body))
-                .retrieve().toBodilessEntity();
+    /** The event ID makes Mails really send it, at most once. True only if it went out; an older Mails answers 204, so false. */
+    public boolean sendTransactional(String eventId, Long userId, String title, String body) {
+        SendResult result = sends.post().uri("/internal/v1/notifications/transactional")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(Map.of("eventId", eventId, "userId", userId, "title", title, "body", body))
+                .retrieve().body(SendResult.class);
+        return result != null && result.delivered();
     }
 
     /** Repeats are safe: Mails ignores a reminder it already has. */

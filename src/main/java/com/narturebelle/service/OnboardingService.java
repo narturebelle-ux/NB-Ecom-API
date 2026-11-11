@@ -313,6 +313,11 @@ public class OnboardingService {
         OnboardingCompletion saved = onboardingCompletionRepository.save(completion);
         auditService.record("ONBOARDING_COMPLETED", "ONBOARDING_COMPLETION", String.valueOf(saved.getId()),
                 "User completed onboarding");
+        // Sent once: a repeat call returns above. Goes out after commit, and names no health detail.
+        mailQueue.sendToUser("ONBOARDING_COMPLETE", userId, "Welcome to NartureBelle, you're all set",
+                "Hello,\n\nYour onboarding is complete, so everything on NartureBelle is now open to you: book sessions "
+                        + "with your care team, keep your records in one place, and follow your journey.\n\n"
+                        + "Sign in any time: https://narturebelle.com/journey\n\n-- The NartureBelle team");
         return saved;
     }
 }

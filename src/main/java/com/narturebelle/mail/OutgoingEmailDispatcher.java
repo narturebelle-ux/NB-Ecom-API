@@ -90,8 +90,7 @@ public class OutgoingEmailDispatcher {
 
     private boolean call(OutgoingEmail row) {
         if (row.getKind() == OutgoingEmail.Kind.TRANSACTIONAL) {
-            mailsClient.sendTransactional(row.getUserId(), row.getSubject(), row.getBody());
-            return false;
+            return mailsClient.sendTransactional(row.getEventId(), row.getUserId(), row.getSubject(), row.getBody());
         }
         return mailsClient.send(new OutgoingMail(row.getEventId(), row.getEventType(), row.getUserId(), row.getToAddress(),
                 row.getReplyTo(), row.getSubject(), row.getBody()));
