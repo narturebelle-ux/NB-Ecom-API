@@ -73,20 +73,66 @@ payments:
   mock:
     webhook-secret: ${MOCK_PAYMENT_WEBHOOK_SECRET:dev-only-mock-webhook-secret-change-me}
 
-# Supabase Storage (Phase 4) — reuses the same Supabase project as the Postgres DB (same us-east-1
-# region, no new infra account). No defaults on these two: there's no safe degraded mode for
-# storage, unlike Firebase's ADC fallback chain, so fail fast exactly like DB_URL/DB_PASSWORD.
+# Where things live (owner, D48, 11 Nov 2026): Supabase is the DATABASE only (the datasource above).
+# Every file and video — images, PDFs, documents, videos — is stored in AWS S3 (below).
+#
+# Legacy Supabase Storage: only for any old record whose file was stored there before S3 (none exist
+# as of 11 Nov 2026). Optional: leave SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY unset; if an old
+# Supabase file is ever opened without them, that one call fails with a clear message.
 supabase:
-  url: ${SUPABASE_URL}
-  service-role-key: ${SUPABASE_SERVICE_ROLE_KEY}
+  url: ${SUPABASE_URL:}
+  service-role-key: ${SUPABASE_SERVICE_ROLE_KEY:}
   storage:
     bucket: ${SUPABASE_STORAGE_BUCKET:health-records}
+
+# AWS S3 file storage (F9-S19, D48; setup in S3_SETUP.md). S3 is the default for all new uploads, and
+# S3_BUCKET is required: the API refuses to start without it (no silent fallback to anything else).
+# STORAGE_PROVIDER=supabase exists only for old setups and tests. Each record remembers its own storage.
+# Access keys: only on the API Vercel projects, never in git, chat or the UI project. NB_S3_* because
+# Vercel reserves the AWS_* names; leave both empty to use the AWS default chain (for example a role).
+storage:
+  provider: ${STORAGE_PROVIDER:s3}
+  s3:
+    bucket: ${S3_BUCKET:}
+    region: ${S3_REGION:ap-south-1}
+    access-key-id: ${NB_S3_ACCESS_KEY_ID:}
+    secret-access-key: ${NB_S3_SECRET_ACCESS_KEY:}
 
 # Records vault upload/sharing policy knobs — placeholder defaults, flagged in HANDOFF.md.
 records:
   upload:
+    # Documents and images (DOCUMENT kind): 25 MB by default.
     allowed-mime-types: ${RECORDS_ALLOWED_MIME_TYPES:application/pdf,image/jpeg,image/png,image/heic}
     max-size-bytes: ${RECORDS_MAX_SIZE_BYTES:26214400}
+    # Always refused, even if added to the allowed list: Word files until the owner decides (D49).
+    blocked-mime-types: ${RECORDS_BLOCKED_MIME_TYPES:application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document}
+    # About 10 GB per mother in total (D49). Deleted files and videos past their removal date don't count.
+    quota-bytes-per-user: ${RECORDS_QUOTA_BYTES_PER_USER:10737418240}
+  video:
+    # Videos are accepted only when STORAGE_PROVIDER=s3. Maximum size is an open question (D49): 2 GB default.
+    allowed-mime-types: ${RECORDS_VIDEO_MIME_TYPES:video/mp4,video/quicktime,video/webm,video/3gpp}
+    max-size-bytes: ${RECORDS_VIDEO_MAX_SIZE_BYTES:2147483648}
+    # Larger videos upload in parts (S3 multipart); each part 16 MB by default (S3 minimum is 5 MB).
+    multipart-threshold-bytes: ${RECORDS_VIDEO_MULTIPART_THRESHOLD_BYTES:67108864}
+    part-size-bytes: ${RECORDS_VIDEO_PART_SIZE_BYTES:16777216}
+    # MUST match the S3 lifecycle rule on videos/ (S3_SETUP.md). Counted from upload until D49 says otherwise.
+    # trash-days is for videos only (7). Deleted documents stay 30 days in trash (owner, 11 Nov 2026), which the
+    # bucket's files-deleted-versions-30-days rule alone handles: the app has no document timer, and no timer
+    # ever deletes a document she hasn't deleted herself (D49: documents kept at least 1 year).
+    retention-days: ${RECORDS_VIDEO_RETENTION_DAYS:30}
+    trash-days: ${RECORDS_VIDEO_TRASH_DAYS:7}
+    # Warnings before removal: day 23 and day 29 of 30. The UI shows the banner from the first one.
+    warn-days-before: ${RECORDS_VIDEO_WARN_DAYS_BEFORE:7,1}
+    # Daily video job (warnings, TRASHED/PURGED audit): 09:00 India time, only with SCHEDULING_ENABLED on.
+    job-cron: ${RECORDS_VIDEO_JOB_CRON:0 0 9 * * *}
+    # Where the warning email's "Download it now" link goes (the app, never S3). Pre-production sets its own.
+    app-records-url: ${APP_RECORDS_URL:https://narturebelle.com/records}
+    # In-app warnings need Notifications to accept reminder type VIDEO_REMOVAL_WARNING first (TASKS.md F9-S19 item 12).
+    in-app-warnings-enabled: ${RECORDS_VIDEO_IN_APP_WARNINGS:false}
+  scan:
+    # S3 uploads open only after GuardDuty tags them clean. false = pre-production testing without GuardDuty
+    # only (owner, 11 Nov 2026): new S3 uploads are NOT_SCANNED and open at once. The prod profile refuses to start with false.
+    required: ${RECORDS_SCAN_REQUIRED:true}
   share:
     max-expiry-days: ${RECORDS_SHARE_MAX_EXPIRY_DAYS:180}
 

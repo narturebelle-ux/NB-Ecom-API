@@ -31,6 +31,12 @@ supabase:
   url: http://localhost:9999
   service-role-key: test-service-role-key
 
+# Real default is S3 (application.yml), which needs S3_BUCKET. Most test contexts have no bucket, so
+# they keep the legacy Supabase path with a mocked StorageProvider; S3 tests (S3RecordsTest,
+# S3RecordsScanOffTest) set storage.provider=s3 and a bucket themselves.
+storage:
+  provider: supabase
+
 data:
   encryption-key: MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=
 

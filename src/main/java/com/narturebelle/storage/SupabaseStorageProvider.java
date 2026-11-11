@@ -10,10 +10,10 @@ import java.time.LocalDateTime;
 import java.util.Map;
 
 /**
- * Real HTTP calls to Supabase's Storage REST API, reusing the same Supabase project that already
- * backs Postgres (same us-east-1 region) — no new infra account. Needs SUPABASE_URL and
- * SUPABASE_SERVICE_ROLE_KEY to actually work; both fail fast with no default, same treatment as
- * DB_URL/DB_PASSWORD (there's no safe degraded mode for storage, unlike Firebase's ADC fallback).
+ * LEGACY. Supabase Storage held files before D48 (11 Nov 2026): all files and videos now go to AWS S3,
+ * and Supabase is the database only. Kept only so a record whose file was stored here can still be
+ * opened (none exist as of 11 Nov 2026). SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are optional: without
+ * them the app starts normally, and any call here fails with a clear message.
  *
  * IMPORTANT: Supabase's Storage API response field names (e.g. "url"/"signedURL"/"token") have
  * shifted across API versions. This implementation parses defensively (checks a few known field
@@ -27,10 +27,12 @@ public class SupabaseStorageProvider implements StorageProvider {
 
     private final RestClient restClient;
     private final String supabaseUrl;
+    private final boolean configured;
 
-    public SupabaseStorageProvider(@Value("${supabase.url}") String supabaseUrl,
-                                    @Value("${supabase.service-role-key}") String serviceRoleKey) {
+    public SupabaseStorageProvider(@Value("${supabase.url:}") String supabaseUrl,
+                                    @Value("${supabase.service-role-key:}") String serviceRoleKey) {
         this.supabaseUrl = supabaseUrl;
+        this.configured = !supabaseUrl.isBlank() && !serviceRoleKey.isBlank();
         this.restClient = RestClient.builder()
                 .baseUrl(supabaseUrl + "/storage/v1")
                 .defaultHeader("Authorization", "Bearer " + serviceRoleKey)
@@ -40,6 +42,7 @@ public class SupabaseStorageProvider implements StorageProvider {
 
     @Override
     public SignedUploadUrl createSignedUploadUrl(String bucket, String objectPath, Duration expiry) {
+        requireConfigured();
         Map<?, ?> response = restClient.post()
                 .uri("/object/upload/sign/{bucket}/{path}", bucket, objectPath)
                 .contentType(MediaType.APPLICATION_JSON)
@@ -56,6 +59,7 @@ public class SupabaseStorageProvider implements StorageProvider {
 
     @Override
     public SignedDownloadUrl createSignedDownloadUrl(String bucket, String objectPath, Duration expiry) {
+        requireConfigured();
         Map<?, ?> response = restClient.post()
                 .uri("/object/sign/{bucket}/{path}", bucket, objectPath)
                 .contentType(MediaType.APPLICATION_JSON)
@@ -71,6 +75,7 @@ public class SupabaseStorageProvider implements StorageProvider {
 
     @Override
     public boolean objectExists(String bucket, String objectPath) {
+        requireConfigured();
         try {
             restClient.get()
                     .uri("/object/info/{bucket}/{path}", bucket, objectPath)
@@ -84,10 +89,18 @@ public class SupabaseStorageProvider implements StorageProvider {
 
     @Override
     public void deleteObject(String bucket, String objectPath) {
+        requireConfigured();
         restClient.method(org.springframework.http.HttpMethod.DELETE)
                 .uri("/object/{bucket}/{path}", bucket, objectPath)
                 .retrieve()
                 .toBodilessEntity();
+    }
+
+    private void requireConfigured() {
+        if (!configured) {
+            throw new IllegalStateException("This file is in legacy Supabase Storage, but SUPABASE_URL and "
+                    + "SUPABASE_SERVICE_ROLE_KEY are not set. Files are stored in S3 now (D48).");
+        }
     }
 
     private String supabaseBase() {

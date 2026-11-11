@@ -43,6 +43,17 @@ public class MailQueue {
         enqueue(email(eventType, to, null, replyTo, subject, text));
     }
 
+    /**
+     * Like sendToUser, with a fixed event ID: the outbox's unique event ID refuses a second copy, and
+     * NB-Ecom-Notifications-API treats a repeated event ID as already sent. For "send this once" emails.
+     * Must run in the caller's transaction, so a duplicate rolls back with it.
+     */
+    public void sendToUserOnce(String eventId, String eventType, Long userId, String subject, String text) {
+        OutgoingEmail row = email(eventType, null, userId, null, subject, text);
+        row.setEventId(eventId);
+        enqueue(row);
+    }
+
     public void sendToUser(String eventType, Long userId, String subject, String text) {
         enqueue(email(eventType, null, userId, null, subject, text));
     }

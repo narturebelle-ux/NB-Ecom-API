@@ -3,6 +3,8 @@ package com.narturebelle.controller;
 import com.narturebelle.dto.CreateRecordShareRequest;
 import com.narturebelle.dto.CreateRecordUploadUrlRequest;
 import com.narturebelle.dto.HealthRecordResponse;
+import com.narturebelle.dto.MultipartUploadRequests;
+import com.narturebelle.storage.UploadedPart;
 import com.narturebelle.dto.PatchRecordRequest;
 import com.narturebelle.dto.RecordAccessLogEntryResponse;
 import com.narturebelle.dto.RecordDownloadUrlResponse;
@@ -25,6 +27,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/records")
@@ -50,7 +53,47 @@ public class RecordController {
         Long userId = requireUserId(authorizationService.currentPrincipal());
         consentService.requireGranted(userId, ConsentDocumentType.RECORDS_STORAGE);
         var intent = recordService.issueUploadUrl(userId, req);
-        return ResponseEntity.ok(RecordUploadUrlResponse.of(intent.objectPath(), intent.uploadUrl(), intent.token(), intent.expiresAt()));
+        return ResponseEntity.ok(RecordUploadUrlResponse.from(intent));
+    }
+
+    /** Allowed types, size limits and her quota, so the UI can check a file before uploading it. */
+    @GetMapping("/upload-rules")
+    public ResponseEntity<RecordService.UploadRules> uploadRules() {
+        Long userId = requireUserId(authorizationService.currentPrincipal());
+        return ResponseEntity.ok(recordService.uploadRules(userId));
+    }
+
+    /** Large videos: short-lived links for some parts. Ask again for a part whose link expired or failed. */
+    @RequireVerified
+    @PostMapping("/uploads/{uploadId}/part-urls")
+    public ResponseEntity<Map<String, Object>> partUrls(@PathVariable String uploadId,
+                                                        @Valid @RequestBody MultipartUploadRequests.PartUrls req) {
+        Long userId = requireUserId(authorizationService.currentPrincipal());
+        consentService.requireGranted(userId, ConsentDocumentType.RECORDS_STORAGE);
+        var parts = recordService.issuePartUrls(userId, uploadId, req.getObjectPath(), req.getPartNumbers());
+        return ResponseEntity.ok(Map.of("parts", parts));
+    }
+
+    /** Large videos: join the uploaded parts. Then call POST /records as for any file. */
+    @RequireVerified
+    @PostMapping("/uploads/{uploadId}/complete")
+    public ResponseEntity<Void> completeUpload(@PathVariable String uploadId,
+                                               @Valid @RequestBody MultipartUploadRequests.Complete req) {
+        Long userId = requireUserId(authorizationService.currentPrincipal());
+        consentService.requireGranted(userId, ConsentDocumentType.RECORDS_STORAGE);
+        List<UploadedPart> parts = req.getParts().stream()
+                .map(p -> new UploadedPart(p.getPartNumber(), p.getEtag())).toList();
+        recordService.completeMultipart(userId, uploadId, req.getObjectPath(), parts);
+        return ResponseEntity.noContent().build();
+    }
+
+    /** Large videos: cancel an upload so S3 drops the parts. */
+    @RequireVerified
+    @DeleteMapping("/uploads/{uploadId}")
+    public ResponseEntity<Void> abortUpload(@PathVariable String uploadId, @RequestParam String objectPath) {
+        Long userId = requireUserId(authorizationService.currentPrincipal());
+        recordService.abortMultipart(userId, uploadId, objectPath);
+        return ResponseEntity.noContent().build();
     }
 
     @RequireVerified
@@ -59,14 +102,14 @@ public class RecordController {
         Long userId = requireUserId(authorizationService.currentPrincipal());
         consentService.requireGranted(userId, ConsentDocumentType.RECORDS_STORAGE);
         HealthRecord record = recordService.registerUpload(userId, req);
-        return ResponseEntity.ok(HealthRecordResponse.from(record));
+        return ResponseEntity.ok(toDto(record));
     }
 
     @GetMapping
     public ResponseEntity<List<HealthRecordResponse>> list() {
         Long userId = requireUserId(authorizationService.currentPrincipal());
         List<HealthRecordResponse> records = recordService.listForOwner(userId).stream()
-                .map(HealthRecordResponse::from).toList();
+                .map(this::toDto).toList();
         return ResponseEntity.ok(records);
     }
 
@@ -75,7 +118,7 @@ public class RecordController {
         Long userId = requireUserId(authorizationService.currentPrincipal());
         var callerProvider = providerService.findByUserId(userId).orElse(null);
         List<HealthRecordResponse> records = callerProvider != null
-                ? recordService.listSharedWithProvider(callerProvider.getId()).stream().map(HealthRecordResponse::from).toList()
+                ? recordService.listSharedWithProvider(callerProvider.getId()).stream().map(this::toDto).toList()
                 : List.of();
         return ResponseEntity.ok(records);
     }
@@ -88,7 +131,7 @@ public class RecordController {
         }
         var access = authorizationService.requireRecordAccess(record);
         recordService.logView(record, authorizationService.currentPrincipal().userId(), access.relationship(), access.matchedShareId());
-        return ResponseEntity.ok(HealthRecordResponse.from(record));
+        return ResponseEntity.ok(toDto(recordService.refreshScanStatus(record)));
     }
 
     @RequireVerified
@@ -101,7 +144,7 @@ public class RecordController {
         authorizationService.requireSelfOrAdmin(record.getUserId());
         Long actorUserId = authorizationService.currentPrincipal().userId();
         HealthRecord saved = recordService.patchCategory(record, req.getCategory(), actorUserId);
-        return ResponseEntity.ok(HealthRecordResponse.from(saved));
+        return ResponseEntity.ok(toDto(saved));
     }
 
     @RequireVerified
@@ -114,19 +157,21 @@ public class RecordController {
         authorizationService.requireSelfOrAdmin(record.getUserId());
         Long actorUserId = authorizationService.currentPrincipal().userId();
         HealthRecord saved = recordService.softDelete(record, actorUserId);
-        return ResponseEntity.ok(HealthRecordResponse.from(saved));
+        return ResponseEntity.ok(toDto(saved));
     }
 
     @RequireVerified
     @PostMapping("/{id}/download-url")
-    public ResponseEntity<RecordDownloadUrlResponse> downloadUrl(@PathVariable Long id) {
+    public ResponseEntity<RecordDownloadUrlResponse> downloadUrl(@PathVariable Long id,
+                                                                 @RequestBody(required = false) MultipartUploadRequests.Download body) {
         HealthRecord record = recordService.find(id).orElse(null);
         if (record == null) {
             return ResponseEntity.notFound().build();
         }
         var access = authorizationService.requireRecordAccess(record);
         Long actorUserId = authorizationService.currentPrincipal().userId();
-        var intent = recordService.issueDownloadUrl(record, actorUserId, access.relationship(), access.matchedShareId());
+        String disposition = body != null ? body.getDisposition() : null;
+        var intent = recordService.issueDownloadUrl(record, actorUserId, access.relationship(), access.matchedShareId(), disposition);
         return ResponseEntity.ok(RecordDownloadUrlResponse.of(intent.downloadUrl(), intent.expiresAt()));
     }
 
@@ -188,6 +233,10 @@ public class RecordController {
                 .map(event -> RecordAccessLogEntryResponse.from(event, record))
                 .toList();
         return ResponseEntity.ok(log);
+    }
+
+    private HealthRecordResponse toDto(HealthRecord record) {
+        return HealthRecordResponse.from(record, recordService.stateOf(record));
     }
 
     private Long requireUserId(FirebaseUserPrincipal principal) {

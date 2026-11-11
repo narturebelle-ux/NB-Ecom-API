@@ -4,9 +4,12 @@ import com.narturebelle.mail.OutgoingEmailDispatcher;
 import com.narturebelle.model.User;
 import com.narturebelle.repository.UserRepository;
 import com.narturebelle.service.ConsentService;
+import com.narturebelle.service.VideoRetentionService;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -26,12 +29,17 @@ public class InternalController {
     private final UserRepository userRepository;
     private final OutgoingEmailDispatcher outgoingEmailDispatcher;
     private final ConsentService consentService;
+    private final VideoRetentionService videoRetentionService;
+    private final boolean schedulingEnabled;
 
     public InternalController(UserRepository userRepository, OutgoingEmailDispatcher outgoingEmailDispatcher,
-                              ConsentService consentService) {
+                              ConsentService consentService, VideoRetentionService videoRetentionService,
+                              @Value("${narturebelle.scheduling.enabled:true}") boolean schedulingEnabled) {
         this.userRepository = userRepository;
         this.outgoingEmailDispatcher = outgoingEmailDispatcher;
         this.consentService = consentService;
+        this.videoRetentionService = videoRetentionService;
+        this.schedulingEnabled = schedulingEnabled;
     }
 
     /** Sign-in for the other APIs: Firebase UID to user ID and roles. 404 means no profile yet. */
@@ -61,5 +69,20 @@ public class InternalController {
     @PostMapping("/outgoing-emails/retry")
     public Map<String, Integer> retryOutgoingEmails() {
         return Map.of("tried", outgoingEmailDispatcher.retryDue());
+    }
+
+    /**
+     * For the external scheduler (D18): the daily video job (F9-S19), in case the container slept through
+     * 09:00. Does nothing where SCHEDULING_ENABLED is off, and nothing if another copy is running it.
+     */
+    @PostMapping("/jobs/video-retention")
+    public Map<String, Object> runVideoRetention() {
+        if (!schedulingEnabled) {
+            return Map.of("ran", false, "reason", "SCHEDULING_DISABLED");
+        }
+        return videoRetentionService.runIfFree(LocalDateTime.now())
+                .<Map<String, Object>>map(result -> Map.of("ran", true, "checked", result.checked(),
+                        "warningsSent", result.warningsSent(), "trashed", result.trashed(), "purged", result.purged()))
+                .orElse(Map.of("ran", false, "reason", "ALREADY_RUNNING"));
     }
 }
