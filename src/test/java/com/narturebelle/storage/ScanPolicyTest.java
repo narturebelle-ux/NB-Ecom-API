@@ -4,25 +4,29 @@ import com.narturebelle.model.HealthRecord;
 import com.narturebelle.model.ScanVerdict;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.mock.env.MockEnvironment;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.*;
 
-/** RECORDS_SCAN_REQUIRED (owner, 11 Nov 2026): off only for pre-production testing; production never starts without scanning. */
+/** RECORDS_SCAN_REQUIRED (owner, 11 Nov 2026): may be off in stage and production until GuardDuty is set up; never silently. */
+@org.junit.jupiter.api.extension.ExtendWith(OutputCaptureExtension.class)
 class ScanPolicyTest {
 
     private final ApplicationContextRunner context = new ApplicationContextRunner().withBean(ScanPolicy.class);
 
+    /** Owner decision, 11 Nov 2026: production may run without scanning until GuardDuty, but never silently. */
     @Test
-    void prodProfile_withScanningOff_refusesToStart() {
+    void prodProfile_withScanningOff_startsButLogsAnError(CapturedOutput output) {
         context.withPropertyValues("records.scan.required=false")
                 .withInitializer(ctx -> ctx.getEnvironment().setActiveProfiles("prod"))
                 .run(ctx -> {
-                    assertThat(ctx).hasFailed();
-                    assertThat(ctx.getStartupFailure()).rootCause()
-                            .hasMessageContaining("RECORDS_SCAN_REQUIRED=false is not allowed in production");
+                    assertThat(ctx).hasNotFailed();
+                    assertFalse(ctx.getBean(ScanPolicy.class).required());
                 });
+        assertThat(output.getAll()).contains("ERROR").contains("PRODUCTION IS RUNNING WITHOUT MALWARE SCANNING");
     }
 
     @Test

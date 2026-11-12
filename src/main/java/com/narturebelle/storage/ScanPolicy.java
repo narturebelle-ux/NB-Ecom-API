@@ -11,9 +11,13 @@ import org.springframework.stereotype.Component;
 
 /**
  * Whether S3 uploads must pass the GuardDuty malware scan before they can be opened (F9-S19 item 7).
- * RECORDS_SCAN_REQUIRED=false is for pre-production testing without GuardDuty only (owner, 11 Nov 2026):
- * new S3 uploads are then NOT_SCANNED and open at once, like old Supabase files. Production refuses to
- * start with it off (F9-S6, F9-S17): there is no silent fallback.
+ * RECORDS_SCAN_REQUIRED=false turns scanning off: new S3 uploads are then NOT_SCANNED and open at once.
+ *
+ * Owner decision, 11 Nov 2026: GuardDuty isn't set up yet, so scanning may be off in stage AND production
+ * while S3 is tested; the owner turns it on once GuardDuty Malware Protection is enabled. This replaces the
+ * earlier "production refuses to start" rule. Never silent: production with scanning off logs an ERROR at
+ * every startup, and each unscanned upload is logged and audited (malwareScanning: OFF). F9-S6 and F9-S17
+ * stay open until it is back on.
  *
  * An S3 file saved as NOT_SCANNED opens only while scanning is off. Once it's switched on, those files are
  * treated as not ready, so nothing unscanned slips through.
@@ -27,12 +31,11 @@ public class ScanPolicy {
 
     public ScanPolicy(@Value("${records.scan.required:true}") boolean required, Environment environment) {
         if (!required && environment.acceptsProfiles(Profiles.of("prod"))) {
-            throw new IllegalStateException("RECORDS_SCAN_REQUIRED=false is not allowed in production: "
-                    + "every upload must be scanned before it can be opened (F9-S6, F9-S17).");
-        }
-        if (!required) {
-            log.warn("Malware scanning is OFF: new S3 uploads open without a scan (RECORDS_SCAN_REQUIRED=false). "
-                    + "Pre-production testing only.");
+            log.error("PRODUCTION IS RUNNING WITHOUT MALWARE SCANNING (RECORDS_SCAN_REQUIRED=false): mothers' "
+                    + "uploads open without a scan. Owner decision 11 Nov 2026, until GuardDuty is set up. "
+                    + "Turn GuardDuty on and set RECORDS_SCAN_REQUIRED=true before real users (F9-S6, F9-S17).");
+        } else if (!required) {
+            log.warn("Malware scanning is OFF: new S3 uploads open without a scan (RECORDS_SCAN_REQUIRED=false).");
         }
         this.required = required;
     }
