@@ -1,5 +1,7 @@
 package com.narturebelle.controller;
 
+import com.narturebelle.mail.MailsClient;
+import com.narturebelle.mail.OutgoingMail;
 import com.narturebelle.model.Consent;
 import com.narturebelle.model.ConsentDocumentType;
 import com.narturebelle.model.OnboardingCallSlot;
@@ -19,6 +21,7 @@ import com.narturebelle.security.FirebaseTokenVerifier;
 import com.narturebelle.security.VerifiedFirebaseToken;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -33,6 +36,11 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -59,6 +67,7 @@ class OnboardingTest {
     @Autowired private OnboardingCompletionRepository onboardingCompletionRepository;
 
     @MockBean private FirebaseTokenVerifier firebaseTokenVerifier;
+    @MockBean private MailsClient mailsClient;
 
     @BeforeEach
     void setUp() throws Exception {
@@ -386,6 +395,15 @@ class OnboardingTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.documentsSigned").value(true))
                 .andExpect(jsonPath("$.completedAt").exists());
+
+        // One signed-document email and one welcome email, even though completion was called twice.
+        verify(mailsClient, times(1)).sendTransactional(any(), eq(userIdFor(TOKEN_A)), eq("Your signed onboarding document"), any());
+        ArgumentCaptor<OutgoingMail> sent = ArgumentCaptor.forClass(OutgoingMail.class);
+        verify(mailsClient, atLeastOnce()).send(sent.capture());
+        assertEquals(1, sent.getAllValues().stream().filter(mail -> "ONBOARDING_COMPLETE".equals(mail.eventType())).count());
+        OutgoingMail welcome = sent.getAllValues().stream().filter(mail -> "ONBOARDING_COMPLETE".equals(mail.eventType())).findFirst().orElseThrow();
+        assertEquals(userIdFor(TOKEN_A), welcome.userId());
+        assertEquals("Welcome to NartureBelle, you're all set", welcome.subject());
     }
 
     private Long userIdFor(String token) {
