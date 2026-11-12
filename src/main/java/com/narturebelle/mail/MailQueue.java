@@ -74,7 +74,7 @@ public class MailQueue {
         enqueue(row);
     }
 
-    /** The notification channel for transactional messages, which is still a NoOp in Mails. */
+    /** Transactional messages, such as a signed document. Mails sends them once it receives the row's event ID. */
     public void sendTransactional(Long userId, String title, String body) {
         OutgoingEmail row = email("TRANSACTIONAL", null, userId, null, title, body);
         row.setKind(OutgoingEmail.Kind.TRANSACTIONAL);

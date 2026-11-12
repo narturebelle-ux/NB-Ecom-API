@@ -108,6 +108,21 @@ class MailQueueTest {
     }
 
     @Test
+    void transactional_sendsItsEventId_andARetryReusesIt() {
+        ArgumentCaptor<String> eventIds = ArgumentCaptor.forClass(String.class);
+        when(mailsClient.sendTransactional(eventIds.capture(), eq(7L), eq("Your signed onboarding document"), eq("Signed.")))
+                .thenThrow(new RuntimeException("sleeping")).thenReturn(true);
+        mailQueue.sendTransactional(7L, "Your signed onboarding document", "Signed.");
+
+        makeDue();
+        assertEquals(1, dispatcher.retryDue());
+
+        assertNotNull(eventIds.getAllValues().get(0));
+        assertEquals(eventIds.getAllValues().get(0), eventIds.getAllValues().get(1));
+        assertEquals(OutgoingEmail.Status.SENT, repository.findAll().get(0).getStatus());
+    }
+
+    @Test
     void retry_skipsRowsThatAreSentOrTooNew() {
         when(mailsClient.send(any())).thenReturn(true);
         mailQueue.sendToAddress("TEST", "x@example.com", null, "Subject", "Text");
