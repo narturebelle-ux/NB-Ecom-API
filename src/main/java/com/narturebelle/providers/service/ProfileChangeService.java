@@ -23,6 +23,8 @@ import com.narturebelle.providers.repository.ProviderBankDetailsRepository;
 import com.narturebelle.repository.ProviderRepository;
 import com.narturebelle.security.AuditService;
 import com.narturebelle.security.AuthorizationService;
+import com.narturebelle.dto.DirectUploadRequests;
+import com.narturebelle.storage.DirectUploadService;
 import com.narturebelle.providers.security.FieldEncryptor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -63,6 +65,7 @@ public class ProfileChangeService {
     private final ProviderLifecycleService lifecycleService;
     private final FieldEncryptor encryptor;
     private final ObjectMapper objectMapper;
+    private final DirectUploadService directUploads;
     private final AuditService auditService;
     private final AuthorizationService authorizationService;
     private final ApplicationNotifier notifier;
@@ -72,7 +75,8 @@ public class ProfileChangeService {
                                 ApplicationDocumentService documentService, ApplicationDocumentRepository documentRepository,
                                 ProviderBankDetailsRepository bankRepository, ProviderRepository providerRepository,
                                 ProviderLifecycleService lifecycleService, FieldEncryptor encryptor, ObjectMapper objectMapper,
-                                AuditService auditService, AuthorizationService authorizationService, ApplicationNotifier notifier) {
+                                AuditService auditService, AuthorizationService authorizationService, ApplicationNotifier notifier,
+                                DirectUploadService directUploads) {
         this.changeRepository = changeRepository;
         this.applicationRepository = applicationRepository;
         this.applicationService = applicationService;
@@ -88,6 +92,7 @@ public class ProfileChangeService {
         this.auditService = auditService;
         this.authorizationService = authorizationService;
         this.notifier = notifier;
+        this.directUploads = directUploads;
     }
 
     // ---- professional ----
@@ -120,15 +125,51 @@ public class ProfileChangeService {
     @Transactional
     public ChangeRequestResponse attachDocument(Long changeId, MultipartFile file) {
         ProviderApplication application = requireApproved();
+        ProfileChangeRequest change = requireDocumentChange(application, changeId);
+        documentService.storePending(application.getId(), documentKey(change.getChangeType()), file);
+        return toResponse(change);
+    }
+
+    // ---- Direct-to-S3 upload of a change request's document (owner, 12 Nov 2026) ----
+
+    public DirectUploadService.UploadRules documentUploadRules(Long changeId) {
+        ProviderApplication application = requireApproved();
+        requireDocumentChange(application, changeId);
+        return directUploads.rules(documentService.changeRequestPolicy());
+    }
+
+    public DirectUploadService.UploadUrl documentUploadUrl(DirectUploadRequests.UploadUrl req) {
+        ProviderApplication application = requireApproved();
+        if (req.changeRequestId() == null) {
+            throw new ProviderOnboardingException(400, "VALIDATION_FAILED", "Say which change request the file is for.");
+        }
+        requireDocumentChange(application, req.changeRequestId());
+        return directUploads.issue(documentService.changeRequestPolicy(),
+                ApplicationDocumentService.changeRequestScope(application, req.changeRequestId()),
+                req.fileName(), req.mimeType(), req.sizeBytes());
+    }
+
+    /** The approved professional's user id, for the multipart steps (they match an upload on its owner). */
+    public Long requireApprovedUserId() {
+        return requireApproved().getUserId();
+    }
+
+    @Transactional
+    public ChangeRequestResponse attachUploadedDocument(Long changeId, DirectUploadRequests.SavedFile file) {
+        ProviderApplication application = requireApproved();
+        ProfileChangeRequest change = requireDocumentChange(application, changeId);
+        documentService.storePendingUploaded(application, changeId, documentKey(change.getChangeType()), file);
+        return toResponse(change);
+    }
+
+    private ProfileChangeRequest requireDocumentChange(ProviderApplication application, Long changeId) {
         ProfileChangeRequest change = changeRepository.findById(changeId)
                 .filter(found -> found.getApplicationId().equals(application.getId()) && found.getStatus() == ProfileChangeStatus.PENDING)
                 .orElseThrow(() -> new ProviderOnboardingException(404, "CHANGE_NOT_FOUND", "Change request not found."));
-        String key = documentKey(change.getChangeType());
-        if (key == null) {
+        if (documentKey(change.getChangeType()) == null) {
             throw new ProviderOnboardingException(400, "VALIDATION_FAILED", "This change doesn't need a document.");
         }
-        documentService.storePending(application.getId(), key, file);
-        return toResponse(change);
+        return change;
     }
 
     // ---- staff ----

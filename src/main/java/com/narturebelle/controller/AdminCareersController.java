@@ -1,5 +1,7 @@
 package com.narturebelle.controller;
 
+import com.narturebelle.dto.MultipartUploadRequests;
+import com.narturebelle.storage.SignedDownloadUrl;
 import com.narturebelle.dto.JobApplicationResponse;
 import com.narturebelle.dto.JobRequest;
 import com.narturebelle.dto.JobResponse;
@@ -70,6 +72,13 @@ public class AdminCareersController {
                         .filename(resume.application().getResumeFileName(), StandardCharsets.UTF_8).build().toString())
                 .header(HttpHeaders.CACHE_CONTROL, "no-store")
                 .body(resume.content());
+    }
+
+    /** An S3 résumé as a 10-minute link (downloads by default). 409 FILE_NOT_READY / FILE_BLOCKED; older résumés 404. */
+    @PostMapping("/applications/{id}/resume/download-url")
+    public ResponseEntity<SignedDownloadUrl> resumeDownloadUrl(@PathVariable Long id,
+                                                               @RequestBody(required = false) MultipartUploadRequests.Download body) {
+        return ResponseEntity.ok(careersService.resumeDownloadUrl(id, body == null ? null : body.getDisposition()));
     }
 
     private JobResponse withCount(JobPosting job) {
