@@ -1,5 +1,6 @@
 package com.narturebelle.providers.service;
 
+import com.narturebelle.storage.SignedDownloadUrl;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -135,7 +136,7 @@ public class ApplicationReviewService {
         Map<String, FormQuestion> byKey = catalog.questionsByKey(application.getProfessionalType());
         List<ReviewSection> sections = catalog.sections(application.getProfessionalType()).stream()
                 .map(section -> new ReviewSection(section.title(), reviewAnswers(section, answers, byKey))).toList();
-        List<DocumentResponse> documents = documentService.list(id).stream().map(DocumentResponse::from).toList();
+        List<DocumentResponse> documents = documentService.list(id).stream().map(documentService::toResponse).toList();
         List<RequestedChangeResponse> changes = requestedChangeRepository.findByApplicationId(id).stream()
                 .map(change -> new RequestedChangeResponse(change.getQuestionKey(), change.getNote())).toList();
         List<ReviewHistoryItem> history = reviewRepository.findByApplicationIdOrderByCreatedAtAsc(id).stream()
@@ -160,6 +161,13 @@ public class ApplicationReviewService {
         auditService.record("PROVIDER_DOCUMENT_DOWNLOADED", "PROVIDER_APPLICATION", String.valueOf(found.document().getApplicationId()),
                 "Staff downloaded a document");
         return found;
+    }
+
+    public SignedDownloadUrl documentDownloadUrl(Long documentId, String disposition) {
+        ApplicationDocumentService.DownloadLink found = documentService.downloadUrl(null, documentId, disposition);
+        auditService.record("PROVIDER_DOCUMENT_DOWNLOADED", "PROVIDER_APPLICATION", String.valueOf(found.document().getApplicationId()),
+                "Staff opened a document");
+        return found.link();
     }
 
     // ---- decisions ----

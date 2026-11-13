@@ -1,10 +1,16 @@
 package com.narturebelle.providers.model;
 
+import com.narturebelle.model.FileKind;
+import com.narturebelle.model.ScanVerdict;
+import com.narturebelle.storage.StorageBackend;
 import jakarta.persistence.*;
 
 import java.time.LocalDateTime;
 
-/** An uploaded file's details; the bytes are in ApplicationDocumentContent so listing documents never loads them. */
+/**
+ * An uploaded file's details. Older files keep their bytes in ApplicationDocumentContent (so listing never
+ * loads them); files uploaded straight to S3 (owner, 12 Nov 2026) have storageProvider S3 and no content row.
+ */
 @Entity
 @Table(schema = "provider_onboarding", name = "application_documents")
 public class ApplicationDocument {
@@ -30,6 +36,25 @@ public class ApplicationDocument {
 
     @Column(nullable = false)
     private LocalDateTime uploadedAt;
+
+    /** S3 for files uploaded straight to S3 (owner, 12 Nov 2026); null for older files kept in Postgres. */
+    @Enumerated(EnumType.STRING)
+    @Column(length = 32)
+    private StorageBackend storageProvider;
+
+    private String storageBucket;
+
+    @Column(length = 1000)
+    private String storageObjectPath;
+
+    /** GuardDuty's verdict for S3 files; null for Postgres files. */
+    @Enumerated(EnumType.STRING)
+    @Column(length = 32)
+    private ScanVerdict scanStatus;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 32)
+    private FileKind kind = FileKind.DOCUMENT;
 
     @PrePersist
     protected void onCreate() {
@@ -59,4 +84,21 @@ public class ApplicationDocument {
 
     public LocalDateTime getUploadedAt() { return uploadedAt; }
     public void setUploadedAt(LocalDateTime uploadedAt) { this.uploadedAt = uploadedAt; }
+
+    public StorageBackend getStorageProvider() { return storageProvider; }
+    public void setStorageProvider(StorageBackend storageProvider) { this.storageProvider = storageProvider; }
+
+    public String getStorageBucket() { return storageBucket; }
+    public void setStorageBucket(String storageBucket) { this.storageBucket = storageBucket; }
+
+    public String getStorageObjectPath() { return storageObjectPath; }
+    public void setStorageObjectPath(String storageObjectPath) { this.storageObjectPath = storageObjectPath; }
+
+    public ScanVerdict getScanStatus() { return scanStatus; }
+    public void setScanStatus(ScanVerdict scanStatus) { this.scanStatus = scanStatus; }
+
+    public FileKind getKind() { return kind; }
+    public void setKind(FileKind kind) { this.kind = kind; }
+
+    public boolean isOnS3() { return storageProvider == StorageBackend.S3; }
 }

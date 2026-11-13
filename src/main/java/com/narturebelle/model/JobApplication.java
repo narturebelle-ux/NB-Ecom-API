@@ -1,5 +1,6 @@
 package com.narturebelle.model;
 
+import com.narturebelle.storage.StorageBackend;
 import jakarta.persistence.*;
 
 import java.time.LocalDateTime;
@@ -54,6 +55,20 @@ public class JobApplication {
     /** Null until the admin email actually went out (stays null while email is log-only). */
     private LocalDateTime adminNotifiedAt;
 
+    /** S3 for résumés uploaded straight to S3 (owner, 12 Nov 2026); null for older ones kept in Postgres. */
+    @Enumerated(EnumType.STRING)
+    @Column(length = 32)
+    private StorageBackend resumeStorageProvider;
+
+    private String resumeStorageBucket;
+
+    @Column(length = 1000)
+    private String resumeObjectPath;
+
+    @Enumerated(EnumType.STRING)
+    @Column(length = 32)
+    private ScanVerdict resumeScanStatus;
+
     @PrePersist
     protected void onCreate() {
         if (this.submittedAt == null) {
@@ -101,6 +116,20 @@ public class JobApplication {
 
     public long getResumeSizeBytes() { return resumeSizeBytes; }
     public void setResumeSizeBytes(long resumeSizeBytes) { this.resumeSizeBytes = resumeSizeBytes; }
+
+    public StorageBackend getResumeStorageProvider() { return resumeStorageProvider; }
+    public void setResumeStorageProvider(StorageBackend resumeStorageProvider) { this.resumeStorageProvider = resumeStorageProvider; }
+
+    public String getResumeStorageBucket() { return resumeStorageBucket; }
+    public void setResumeStorageBucket(String resumeStorageBucket) { this.resumeStorageBucket = resumeStorageBucket; }
+
+    public String getResumeObjectPath() { return resumeObjectPath; }
+    public void setResumeObjectPath(String resumeObjectPath) { this.resumeObjectPath = resumeObjectPath; }
+
+    public ScanVerdict getResumeScanStatus() { return resumeScanStatus; }
+    public void setResumeScanStatus(ScanVerdict resumeScanStatus) { this.resumeScanStatus = resumeScanStatus; }
+
+    public boolean isResumeOnS3() { return resumeStorageProvider == StorageBackend.S3; }
 
     public LocalDateTime getSubmittedAt() { return submittedAt; }
     public void setSubmittedAt(LocalDateTime submittedAt) { this.submittedAt = submittedAt; }

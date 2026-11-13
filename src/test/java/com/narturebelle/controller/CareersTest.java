@@ -122,6 +122,19 @@ class CareersTest {
     }
 
     @Test
+    void directResumeUpload_withoutS3_is404_soTheUiFallsBackToTheForm() throws Exception {
+        long jobId = postJob("Nurse lead");
+        mockMvc.perform(get("/api/v1/careers/jobs/" + jobId + "/files/upload-rules"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("DIRECT_UPLOAD_UNAVAILABLE"));
+        mockMvc.perform(post("/api/v1/careers/jobs/" + jobId + "/files/upload-url").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"fileName\":\"cv.pdf\",\"mimeType\":\"application/pdf\",\"sizeBytes\":1000}")
+                        .with(request -> { request.setRemoteAddr(ip); return request; }))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("DIRECT_UPLOAD_UNAVAILABLE"));
+    }
+
+    @Test
     void apply_savesTheApplication_andEmailsAdminWithTheResume() throws Exception {
         long jobId = postJob("Senior Nurse");
 

@@ -1,5 +1,16 @@
 package com.narturebelle.service;
 
+import com.narturebelle.dto.DirectUploadRequests;
+import com.narturebelle.dto.JobApplicationJsonRequest;
+import com.narturebelle.model.FileKind;
+import com.narturebelle.model.ScanVerdict;
+import com.narturebelle.model.UploadPurpose;
+import com.narturebelle.storage.DirectUploadService;
+import com.narturebelle.storage.DirectUploadService.FileRule;
+import com.narturebelle.storage.DirectUploadService.StoredFile;
+import com.narturebelle.storage.DirectUploadService.UploadPolicy;
+import com.narturebelle.storage.SignedDownloadUrl;
+import java.util.function.Consumer;
 import com.narturebelle.dto.JobApplicationForm;
 import com.narturebelle.dto.JobRequest;
 import com.narturebelle.mail.MailQueue;
@@ -46,6 +57,13 @@ public class CareersService {
 
     private record ResumeType(String contentType, byte[] magic) {}
 
+    /** S3 résumé uploads: the same three types, up to 10 MB by default; one PUT, never in parts. */
+    private static final List<String> RESUME_MIME_TYPES = List.of("application/pdf", "application/msword",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+    private static final Map<String, String> RESUME_EXTENSION_BY_MIME = Map.of(
+            "application/pdf", "pdf", "application/msword", "doc",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "docx");
+
     private final JobPostingRepository jobPostingRepository;
     private final JobApplicationRepository jobApplicationRepository;
     private final JobApplicationResumeRepository resumeRepository;
@@ -55,11 +73,14 @@ public class CareersService {
     private final AuditService auditService;
     private final TransactionTemplate transactionTemplate;
     private final String adminEmail;
+    private final DirectUploadService directUploads;
+    private final UploadPolicy resumePolicy;
 
     public CareersService(JobPostingRepository jobPostingRepository, JobApplicationRepository jobApplicationRepository,
                           JobApplicationResumeRepository resumeRepository, MailQueue mailQueue, @Value("${careers.admin-url}") String adminUrl, RateLimiter rateLimiter,
                           AuditService auditService, TransactionTemplate transactionTemplate,
-                          @Value("${careers.admin-email}") String adminEmail) {
+                          @Value("${careers.admin-email}") String adminEmail, DirectUploadService directUploads,
+                          @Value("${careers.resume.max-size-bytes:10485760}") long resumeMaxBytes) {
         this.jobPostingRepository = jobPostingRepository;
         this.jobApplicationRepository = jobApplicationRepository;
         this.resumeRepository = resumeRepository;
@@ -69,6 +90,9 @@ public class CareersService {
         this.auditService = auditService;
         this.transactionTemplate = transactionTemplate;
         this.adminEmail = adminEmail;
+        this.directUploads = directUploads;
+        this.resumePolicy = new UploadPolicy(List.of(new FileRule(FileKind.DOCUMENT, RESUME_MIME_TYPES,
+                List.of("pdf", "doc", "docx"), resumeMaxBytes)), "RESUME_TYPE_NOT_ALLOWED", "RESUME_TOO_LARGE", false, true);
     }
 
     // ---- public ----
@@ -84,37 +108,106 @@ public class CareersService {
                 .orElseThrow(() -> jobNotFound(id));
     }
 
+    /** The older multipart form: résumé bytes checked and kept in Postgres (4 MB). Kept during the move to S3. */
     public JobApplication apply(Long jobId, JobApplicationForm form, String clientIp) {
-        JobPosting job = jobPostingRepository.findById(jobId).orElseThrow(() -> jobNotFound(jobId));
-        if (job.getStatus() != JobStatus.OPEN) {
-            throw new CareersException(409, "JOB_CLOSED", "This role is no longer accepting applications.");
-        }
+        JobPosting job = requireOpenForApplications(jobId);
         String email = form.getEmail().trim().toLowerCase(Locale.ROOT);
-        if (!rateLimiter.tryAcquire("apply-ip:" + clientIp, 10, Duration.ofHours(1))
-                || !rateLimiter.tryAcquire("apply-email:" + email, 5, Duration.ofDays(1))) {
-            throw new CareersException(429, "TOO_MANY_REQUESTS", "Too many applications. Please try again later.");
-        }
+        requireApplyAllowance(clientIp, email);
 
         String extension = resumeExtension(form.getResume());
         byte[] content = resumeBytes(form.getResume(), extension);
 
-        JobApplication application = new JobApplication();
-        application.setJobId(jobId);
-        application.setFullName(form.getFullName().trim());
-        application.setEmail(email);
-        application.setPhone(form.getPhone().trim());
-        application.setLocation(blankToNull(form.getLocation()));
-        application.setLinkedinUrl(blankToNull(form.getLinkedinUrl()));
-        application.setPortfolioUrl(blankToNull(form.getPortfolioUrl()));
-        application.setYearsExperience(form.getYearsExperience());
-        application.setCoverNote(blankToNull(form.getCoverNote()));
+        JobApplication application = newApplication(jobId, email, form.getFullName(), form.getPhone(), form.getLocation(),
+                form.getLinkedinUrl(), form.getPortfolioUrl(), form.getYearsExperience(), form.getCoverNote());
         application.setResumeFileName(safeFileName(form.getResume().getOriginalFilename(), extension));
         application.setResumeContentType(RESUME_TYPES.get(extension).contentType());
         application.setResumeSizeBytes(content.length);
+        return submit(job, application, row -> { }, row -> resumeRepository.save(new JobApplicationResume(row.getId(), content)));
+    }
 
+    // ---- Direct-to-S3 résumé upload (owner, 12 Nov 2026) ----
+
+    public DirectUploadService.UploadRules resumeUploadRules(Long jobId) {
+        openJob(jobId);
+        return directUploads.rules(resumePolicy);
+    }
+
+    /** No sign-in here, so the link comes with an upload token that ties the file to this job. */
+    public DirectUploadService.UploadUrl resumeUploadUrl(Long jobId, DirectUploadRequests.UploadUrl req, String clientIp) {
+        requireOpenForApplications(jobId);
+        if (!rateLimiter.tryAcquire("careers-upload-ip:" + clientIp, 20, Duration.ofHours(1))) {
+            throw new CareersException(429, "TOO_MANY_REQUESTS", "Too many uploads. Please try again later.");
+        }
+        return directUploads.issue(resumePolicy, resumeScope(jobId), req.fileName(), req.mimeType(), req.sizeBytes());
+    }
+
+    /** The JSON form: the résumé was uploaded straight to S3 and is claimed with its upload token. */
+    public JobApplication applyWithUploadedResume(Long jobId, JobApplicationJsonRequest req, String clientIp) {
+        JobPosting job = requireOpenForApplications(jobId);
+        String email = req.email().trim().toLowerCase(Locale.ROOT);
+        requireApplyAllowance(clientIp, email);
+        if (req.resume().uploadToken() == null || req.resume().uploadToken().isBlank()) {
+            throw new CareersException(400, "VALIDATION_FAILED", "Please attach your résumé again.", "resume");
+        }
+
+        JobApplication application = newApplication(jobId, email, req.fullName(), req.phone(), req.location(),
+                req.linkedinUrl(), req.portfolioUrl(), req.yearsExperience(), req.coverNote());
+        // Claimed inside the save transaction: if saving fails, the upload stays claimable and can be retried.
+        return submit(job, application, row -> {
+            StoredFile stored = directUploads.claim(resumePolicy, resumeScope(jobId), req.resume().objectPath(),
+                    req.resume().mimeType(), req.resume().uploadToken());
+            row.setResumeFileName(safeFileName(req.resume().originalFileName(),
+                    RESUME_EXTENSION_BY_MIME.getOrDefault(stored.mimeType(), "pdf")));
+            row.setResumeContentType(stored.mimeType());
+            row.setResumeSizeBytes(stored.sizeBytes());
+            row.setResumeStorageProvider(stored.backend());
+            row.setResumeStorageBucket(stored.bucket());
+            row.setResumeObjectPath(stored.objectPath());
+            row.setResumeScanStatus(stored.scanStatus());
+        }, row -> { });
+    }
+
+    private static DirectUploadService.UploadScope resumeScope(Long jobId) {
+        return new DirectUploadService.UploadScope(UploadPurpose.CAREERS_RESUME, null, jobId, null);
+    }
+
+    private JobPosting requireOpenForApplications(Long jobId) {
+        JobPosting job = jobPostingRepository.findById(jobId).orElseThrow(() -> jobNotFound(jobId));
+        if (job.getStatus() != JobStatus.OPEN) {
+            throw new CareersException(409, "JOB_CLOSED", "This role is no longer accepting applications.");
+        }
+        return job;
+    }
+
+    private void requireApplyAllowance(String clientIp, String email) {
+        if (!rateLimiter.tryAcquire("apply-ip:" + clientIp, 10, Duration.ofHours(1))
+                || !rateLimiter.tryAcquire("apply-email:" + email, 5, Duration.ofDays(1))) {
+            throw new CareersException(429, "TOO_MANY_REQUESTS", "Too many applications. Please try again later.");
+        }
+    }
+
+    private static JobApplication newApplication(Long jobId, String email, String fullName, String phone, String location,
+                                                 String linkedinUrl, String portfolioUrl, Integer yearsExperience, String coverNote) {
+        JobApplication application = new JobApplication();
+        application.setJobId(jobId);
+        application.setFullName(fullName.trim());
+        application.setEmail(email);
+        application.setPhone(phone.trim());
+        application.setLocation(blankToNull(location));
+        application.setLinkedinUrl(blankToNull(linkedinUrl));
+        application.setPortfolioUrl(blankToNull(portfolioUrl));
+        application.setYearsExperience(yearsExperience);
+        application.setCoverNote(blankToNull(coverNote));
+        return application;
+    }
+
+    /** Saves the application and its résumé in one transaction, then emails the admin inbox and the applicant. */
+    private JobApplication submit(JobPosting job, JobApplication application, Consumer<JobApplication> beforeSave,
+                                  Consumer<JobApplication> afterSave) {
         JobApplication saved = transactionTemplate.execute(status -> {
+            beforeSave.accept(application);
             JobApplication row = jobApplicationRepository.save(application);
-            resumeRepository.save(new JobApplicationResume(row.getId(), content));
+            afterSave.accept(row);
             notifyAdmin(job, row);
             mailQueue.sendToAddress("JOB_APPLICATION_CONFIRMATION", row.getEmail(), null, "We received your application -- " + oneLine(job.getTitle()),
                     "Hi " + row.getFullName() + ",\n\nThank you for applying for " + job.getTitle()
@@ -123,7 +216,7 @@ public class CareersService {
             return row;
         });
         auditService.record("JOB_APPLICATION_SUBMITTED", "JOB_APPLICATION", String.valueOf(saved.getId()),
-                "Application received for job " + jobId);
+                "Application received for job " + job.getId());
         return saved;
     }
 
@@ -177,6 +270,10 @@ public class CareersService {
     public Resume resume(Long applicationId) {
         JobApplication application = jobApplicationRepository.findById(applicationId)
                 .orElseThrow(() -> new CareersException(404, "APPLICATION_NOT_FOUND", "Application " + applicationId + " not found."));
+        if (application.isResumeOnS3()) {
+            // S3 résumés can be larger than Vercel lets through; they open with a download-url link instead.
+            throw new CareersException(409, "USE_DOWNLOAD_URL", "Open this résumé with its download-url link.");
+        }
         byte[] content = resumeRepository.findById(applicationId)
                 .orElseThrow(() -> new CareersException(404, "APPLICATION_NOT_FOUND", "Résumé for application " + applicationId + " not found."))
                 .getContent();
@@ -186,6 +283,39 @@ public class CareersService {
     }
 
     public record Resume(JobApplication application, byte[] content) {}
+
+    /** An S3 résumé as a 10-minute link, audited like the download. Older Postgres résumés: 404, use /resume. */
+    public SignedDownloadUrl resumeDownloadUrl(Long applicationId, String disposition) {
+        JobApplication application = jobApplicationRepository.findById(applicationId)
+                .orElseThrow(() -> new CareersException(404, "APPLICATION_NOT_FOUND", "Application " + applicationId + " not found."));
+        if (!application.isResumeOnS3()) {
+            throw new CareersException(404, "RESUME_NOT_ON_S3", "Download this résumé with its /resume link.");
+        }
+        refreshResumeScan(application);
+        SignedDownloadUrl signed = directUploads.downloadUrl(application.getResumeStorageBucket(), application.getResumeObjectPath(),
+                application.getResumeScanStatus(), application.getResumeContentType(), disposition == null ? "attachment" : disposition,
+                "NartureBelle-resume-" + applicationId + "." + RESUME_EXTENSION_BY_MIME.getOrDefault(application.getResumeContentType(), "pdf"));
+        auditService.record("JOB_APPLICATION_RESUME_DOWNLOADED", "JOB_APPLICATION", String.valueOf(applicationId),
+                "Admin opened a résumé");
+        return signed;
+    }
+
+    /** Whether an S3 résumé can be opened yet (scan finished and clean); older ones always can. */
+    public boolean resumeAvailable(JobApplication application) {
+        if (!application.isResumeOnS3()) return true;
+        refreshResumeScan(application);
+        return directUploads.allowsDownload(application.getResumeStorageProvider(), application.getResumeScanStatus());
+    }
+
+    private void refreshResumeScan(JobApplication application) {
+        if (application.getResumeScanStatus() != ScanVerdict.PENDING) return;
+        ScanVerdict verdict = directUploads.refreshScan(application.getResumeStorageProvider(), application.getResumeStorageBucket(),
+                application.getResumeObjectPath(), application.getResumeScanStatus());
+        if (verdict != application.getResumeScanStatus()) {
+            application.setResumeScanStatus(verdict);
+            jobApplicationRepository.save(application);
+        }
+    }
 
     // ---- helpers ----
 

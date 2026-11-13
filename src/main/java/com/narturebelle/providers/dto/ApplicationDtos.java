@@ -1,5 +1,7 @@
 package com.narturebelle.providers.dto;
 
+import com.narturebelle.model.FileKind;
+import com.narturebelle.model.ScanVerdict;
 import com.narturebelle.providers.model.ApplicationDocument;
 import com.narturebelle.providers.model.ApplicationStatus;
 import com.narturebelle.model.Role;
@@ -24,9 +26,15 @@ public final class ApplicationDtos {
 
     public record SaveAnswersRequest(@NotNull Map<String, Object> answers) {}
 
-    public record DocumentResponse(Long id, String questionKey, String fileName, int sizeBytes, LocalDateTime uploadedAt) {
-        public static DocumentResponse from(ApplicationDocument d) {
-            return new DocumentResponse(d.getId(), d.getQuestionKey(), d.getFileName(), d.getSizeBytes(), d.getUploadedAt());
+    /**
+     * kind is DOCUMENT or VIDEO; scanStatus is null for older files kept in Postgres. available is false while
+     * an S3 file waits for its malware scan or was blocked by it. Built by ApplicationDocumentService.toResponse.
+     */
+    public record DocumentResponse(Long id, String questionKey, String fileName, int sizeBytes, LocalDateTime uploadedAt,
+                                   FileKind kind, String mimeType, ScanVerdict scanStatus, boolean available) {
+        public static DocumentResponse from(ApplicationDocument d, boolean available) {
+            return new DocumentResponse(d.getId(), d.getQuestionKey(), d.getFileName(), d.getSizeBytes(), d.getUploadedAt(),
+                    d.getKind(), d.getContentType(), d.getScanStatus(), available);
         }
     }
 

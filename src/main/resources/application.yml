@@ -153,6 +153,19 @@ careers:
   admin-email: ${CAREERS_ADMIN_EMAIL:hello@narturebelle.com}
   # Where the team downloads a résumé after signing in. Application emails link here instead of attaching the file.
   admin-url: ${CAREERS_ADMIN_URL:https://narturebelle.com/admin/careers}
+  resume:
+    # Résumés uploaded straight to S3 (PDF, DOC, DOCX): 10 MB by default. The older form upload stays at 4 MB.
+    max-size-bytes: ${CAREERS_RESUME_MAX_SIZE_BYTES:10485760}
+
+# Care professional documents uploaded straight to S3 (owner, 12 Nov 2026). PDF, JPG and PNG, 20 MB by default;
+# the older upload through the API stays at 4 MB. All go under files/ in S3 (no expiry, GuardDuty scan).
+provider-onboarding:
+  upload:
+    max-size-bytes: ${PROVIDER_DOCUMENT_MAX_SIZE_BYTES:20971520}
+    # Question keys that also take a video. Empty: no current question suits one. How long provider videos are
+    # kept is an open owner decision, so leave this empty until it is made.
+    video-question-keys: ${PROVIDER_VIDEO_QUESTION_KEYS:}
+    video-max-size-bytes: ${PROVIDER_VIDEO_MAX_SIZE_BYTES:524288000}
 
 # Idea pool: paid members' votes an idea needs before it is considered for implementation.
 ideas:
