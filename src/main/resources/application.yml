@@ -177,8 +177,9 @@ data:
   encryption-key: ${DATA_ENCRYPTION_KEY:}
 
 onboarding:
-  # Firebase must report a verified email AND a verified phone before an application can be submitted.
-  require-phone-verification: ${REQUIRE_PHONE_VERIFICATION:true}
+  # Firebase must report a verified email before an application can be submitted. A verified phone is not
+  # needed (owner, 12 Nov 2026: no SMS verification for providers); true brings the phone check back.
+  require-phone-verification: ${REQUIRE_PHONE_VERIFICATION:false}
   # Off in prod until the real fixed fees, agreement and training text are in place (see application-prod.yml)
   agreement-signing-enabled: ${AGREEMENT_SIGNING_ENABLED:true}
   # The approved time periods.
