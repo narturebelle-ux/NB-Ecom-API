@@ -132,9 +132,12 @@ public class ProfileChangeService {
 
     // ---- Direct-to-S3 upload of a change request's document (owner, 12 Nov 2026) ----
 
+    /** Without a change id: the general change-document rules, so the UI can check a file before the request exists. */
     public DirectUploadService.UploadRules documentUploadRules(Long changeId) {
         ProviderApplication application = requireApproved();
-        requireDocumentChange(application, changeId);
+        if (changeId != null) {
+            requireDocumentChange(application, changeId);
+        }
         return directUploads.rules(documentService.changeRequestPolicy());
     }
 
