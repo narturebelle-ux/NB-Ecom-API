@@ -278,6 +278,11 @@ class S3ProviderCareersUploadsTest {
 
         call(get("/api/v1/provider-workspace/files/upload-rules").param("changeRequestId", String.valueOf(changeId)), applicant)
                 .andExpect(status().isOk()).andExpect(jsonPath("$.kinds[0].kind").value("DOCUMENT"));
+        // Before a change request exists the form can still check a file against the general rules.
+        call(get("/api/v1/provider-workspace/files/upload-rules"), applicant)
+                .andExpect(status().isOk()).andExpect(jsonPath("$.kinds[0].maxBytes").value(20 * MB));
+        // Only for an approved professional.
+        call(get("/api/v1/provider-workspace/files/upload-rules"), otherApplicant).andExpect(status().isNotFound());
         String path = objectPath(call(post("/api/v1/provider-workspace/files/upload-url").contentType(MediaType.APPLICATION_JSON)
                 .content(json(Map.of("fileName", "renewed.pdf", "mimeType", "application/pdf", "sizeBytes", MB,
                         "changeRequestId", changeId))), applicant).andExpect(status().isOk()));
