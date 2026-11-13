@@ -126,7 +126,7 @@ public class ProviderWorkspaceController {
     // ---- direct-to-S3 upload steps (same shapes as /records §10a); 404 DIRECT_UPLOAD_UNAVAILABLE without S3 ----
 
     @GetMapping("/files/upload-rules")
-    public ResponseEntity<DirectUploadService.UploadRules> uploadRules(@RequestParam Long changeRequestId) {
+    public ResponseEntity<DirectUploadService.UploadRules> uploadRules(@RequestParam(required = false) Long changeRequestId) {
         return ResponseEntity.ok(profileChangeService.documentUploadRules(changeRequestId));
     }
 
