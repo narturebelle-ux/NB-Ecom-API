@@ -395,7 +395,7 @@ public class ApplicationService {
         });
         List<DocumentResponse> documents = documentService.list(application.getId()).stream()
                 .filter(document -> !document.getQuestionKey().startsWith(ApplicationDocumentService.PENDING_PREFIX))
-                .map(DocumentResponse::from).toList();
+                .map(documentService::toResponse).toList();
         List<RequestedChangeResponse> changes = requestedChangeRepository.findByApplicationId(application.getId()).stream()
                 .map(change -> new RequestedChangeResponse(change.getQuestionKey(), change.getNote())).toList();
         return new ApplicationResponse(application.getId(), application.getProfessionalType(), application.getStatus(), answers, sensitiveSaved,

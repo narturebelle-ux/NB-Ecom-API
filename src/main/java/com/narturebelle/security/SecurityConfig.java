@@ -71,8 +71,10 @@ public class SecurityConfig {
                         // Invite banner on a shared referral link ("Asha R. invited you").
                         .requestMatchers(HttpMethod.GET, "/api/v1/referrals/*").permitAll()
                         // Careers page + applying, and the ideas/feedback form (token optional there).
-                        .requestMatchers(HttpMethod.GET, "/api/v1/careers/jobs", "/api/v1/careers/jobs/*").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/v1/careers/jobs/*/applications", "/api/v1/feedback").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/careers/jobs", "/api/v1/careers/jobs/*",
+                                "/api/v1/careers/jobs/*/files/upload-rules").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/careers/jobs/*/applications", "/api/v1/careers/jobs/*/files/upload-url",
+                                "/api/v1/feedback").permitAll()
                         // Dev-only legacy endpoints (bean only exists outside prod/stage; still explicit here).
                         .requestMatchers("/api/v1/auth/send-otp", "/api/v1/auth/login").permitAll()
                         // Only these two roles review care professional applications (customer-approved).

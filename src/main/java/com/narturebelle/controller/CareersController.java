@@ -1,5 +1,8 @@
 package com.narturebelle.controller;
 
+import com.narturebelle.dto.DirectUploadRequests;
+import com.narturebelle.dto.JobApplicationJsonRequest;
+import com.narturebelle.storage.DirectUploadService;
 import com.narturebelle.dto.JobApplicationForm;
 import com.narturebelle.dto.JobResponse;
 import com.narturebelle.model.JobApplication;
@@ -47,5 +50,31 @@ public class CareersController {
         JobApplication saved = careersService.apply(id, form, RateLimiter.clientIp(request));
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(Map.of("id", saved.getId(), "submittedAt", saved.getSubmittedAt()));
+    }
+
+    /** The same application as JSON, with a résumé already uploaded straight to S3 (files/upload-url first). */
+    @PostMapping(value = "/{id}/applications", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<Map<String, Object>> applyJson(@PathVariable Long id, @Valid @RequestBody JobApplicationJsonRequest req,
+                                                         HttpServletRequest request) {
+        if (req.website() != null && !req.website().isBlank()) {
+            // Honeypot filled: a bot. Look successful, save nothing (the stale-upload sweep removes its file).
+            return ResponseEntity.status(HttpStatus.CREATED).body(Map.of("id", 0, "submittedAt", LocalDateTime.now()));
+        }
+        JobApplication saved = careersService.applyWithUploadedResume(id, req, RateLimiter.clientIp(request));
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(Map.of("id", saved.getId(), "submittedAt", saved.getSubmittedAt()));
+    }
+
+    // ---- direct-to-S3 résumé upload: documents only, one PUT, rate-limited by IP; 404 DIRECT_UPLOAD_UNAVAILABLE without S3 ----
+
+    @GetMapping("/{id}/files/upload-rules")
+    public ResponseEntity<DirectUploadService.UploadRules> uploadRules(@PathVariable Long id) {
+        return ResponseEntity.ok(careersService.resumeUploadRules(id));
+    }
+
+    @PostMapping("/{id}/files/upload-url")
+    public ResponseEntity<DirectUploadService.UploadUrl> uploadUrl(@PathVariable Long id, @Valid @RequestBody DirectUploadRequests.UploadUrl req,
+                                                                   HttpServletRequest request) {
+        return ResponseEntity.ok(careersService.resumeUploadUrl(id, req, RateLimiter.clientIp(request)));
     }
 }

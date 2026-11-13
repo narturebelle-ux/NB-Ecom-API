@@ -1,5 +1,12 @@
 package com.narturebelle.providers.controller;
 
+import com.narturebelle.dto.DirectUploadRequests;
+import com.narturebelle.dto.MultipartUploadRequests;
+import com.narturebelle.model.UploadPurpose;
+import com.narturebelle.storage.DirectUploadService;
+import com.narturebelle.storage.SignedDownloadUrl;
+import com.narturebelle.storage.UploadedPart;
+import java.util.Map;
 import com.narturebelle.providers.dto.ApplicationDtos.ApplicationResponse;
 import com.narturebelle.providers.dto.ApplicationDtos.ChangeProfessionRequest;
 import com.narturebelle.providers.dto.ApplicationDtos.DocumentResponse;
@@ -39,14 +46,17 @@ public class ApplicationController {
     private final ProviderWorkspaceService workspaceService;
     private final AuthorizationService authorizationService;
     private final RateLimiter rateLimiter;
+    private final DirectUploadService directUploads;
 
     public ApplicationController(ApplicationService applicationService, ApplicationDocumentService documentService,
-                                 ProviderWorkspaceService workspaceService, AuthorizationService authorizationService, RateLimiter rateLimiter) {
+                                 ProviderWorkspaceService workspaceService, AuthorizationService authorizationService, RateLimiter rateLimiter,
+                                 DirectUploadService directUploads) {
         this.applicationService = applicationService;
         this.documentService = documentService;
         this.workspaceService = workspaceService;
         this.authorizationService = authorizationService;
         this.rateLimiter = rateLimiter;
+        this.directUploads = directUploads;
     }
 
     // ---- public ----
@@ -94,14 +104,72 @@ public class ApplicationController {
         return ResponseEntity.ok(applicationService.saveAnswers(req.answers()));
     }
 
+    /** The older upload through the API into Postgres (4 MB). Kept while the UI moves to the S3 upload below. */
     @PostMapping(value = "/provider-application/documents/{questionKey}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<DocumentResponse> upload(@PathVariable String questionKey, @RequestParam("file") MultipartFile file) {
+        requireUploadAllowance();
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(documentService.toResponse(documentService.upload(applicationService.requireCurrent(), questionKey, file)));
+    }
+
+    /** Saves a file the browser has uploaded straight to S3 (POST /provider-application/files/upload-url first). */
+    @PostMapping(value = "/provider-application/documents/{questionKey}", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<DocumentResponse> saveUploaded(@PathVariable String questionKey,
+                                                         @Valid @RequestBody DirectUploadRequests.SavedFile file) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(documentService.toResponse(documentService.saveUploaded(applicationService.requireCurrent(), questionKey, file)));
+    }
+
+    // ---- direct-to-S3 upload steps (same shapes as /records §10a); 404 DIRECT_UPLOAD_UNAVAILABLE without S3 ----
+
+    @GetMapping("/provider-application/files/upload-rules")
+    public ResponseEntity<DirectUploadService.UploadRules> uploadRules(@RequestParam String questionKey) {
+        return ResponseEntity.ok(documentService.uploadRules(applicationService.requireCurrent(), questionKey));
+    }
+
+    @PostMapping("/provider-application/files/upload-url")
+    public ResponseEntity<DirectUploadService.UploadUrl> uploadUrl(@Valid @RequestBody DirectUploadRequests.UploadUrl req) {
+        requireUploadAllowance();
+        return ResponseEntity.ok(documentService.issueUploadUrl(applicationService.requireCurrent(), req));
+    }
+
+    @PostMapping("/provider-application/files/uploads/{uploadId}/part-urls")
+    public ResponseEntity<Map<String, Object>> partUrls(@PathVariable String uploadId,
+                                                        @Valid @RequestBody MultipartUploadRequests.PartUrls req) {
+        var parts = directUploads.partUrls(applicantScope(), uploadId, req.getObjectPath(), req.getPartNumbers());
+        return ResponseEntity.ok(Map.of("parts", parts));
+    }
+
+    @PostMapping("/provider-application/files/uploads/{uploadId}/complete")
+    public ResponseEntity<Void> completeUpload(@PathVariable String uploadId, @Valid @RequestBody MultipartUploadRequests.Complete req) {
+        List<UploadedPart> parts = req.getParts().stream().map(p -> new UploadedPart(p.getPartNumber(), p.getEtag())).toList();
+        directUploads.complete(applicantScope(), uploadId, req.getObjectPath(), parts);
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/provider-application/files/uploads/{uploadId}")
+    public ResponseEntity<Void> abortUpload(@PathVariable String uploadId, @RequestParam String objectPath) {
+        directUploads.abort(applicantScope(), uploadId, objectPath);
+        return ResponseEntity.noContent().build();
+    }
+
+    /** The applicant's own S3 document, as a 10-minute link. Older Postgres files: 404, use /file. */
+    @PostMapping("/provider-application/documents/{documentId}/download-url")
+    public ResponseEntity<SignedDownloadUrl> downloadUrl(@PathVariable Long documentId,
+                                                         @RequestBody(required = false) MultipartUploadRequests.Download body) {
+        String disposition = body == null ? null : body.getDisposition();
+        return ResponseEntity.ok(documentService.downloadUrl(applicationService.requireCurrent().getId(), documentId, disposition).link());
+    }
+
+    private DirectUploadService.UploadScope applicantScope() {
+        return ApplicationDocumentService.ownerScope(UploadPurpose.PROVIDER_APPLICATION, authorizationService.requireUserId());
+    }
+
+    private void requireUploadAllowance() {
         Long userId = authorizationService.requireUserId();
         if (!rateLimiter.tryAcquire("provider-upload:" + userId, 60, Duration.ofHours(1))) {
             throw new ProviderOnboardingException(429, "TOO_MANY_REQUESTS", "Too many uploads. Please try again later.");
         }
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(DocumentResponse.from(documentService.upload(applicationService.requireCurrent(), questionKey, file)));
     }
 
     @DeleteMapping("/provider-application/documents/{questionKey}")

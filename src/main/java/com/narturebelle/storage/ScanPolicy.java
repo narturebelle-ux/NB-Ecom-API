@@ -51,10 +51,14 @@ public class ScanPolicy {
 
     /** Supabase files keep today's behaviour (F9-S6). S3 files need CLEAN, or NOT_SCANNED while scanning is off. */
     public boolean allowsDownload(HealthRecord record) {
-        if (record.getStorageProvider() != StorageBackend.S3) {
+        return allowsDownload(record.getStorageProvider(), record.getScanStatus());
+    }
+
+    /** The same rule for any stored file (provider documents, résumés). */
+    public boolean allowsDownload(StorageBackend backend, ScanVerdict verdict) {
+        if (backend != StorageBackend.S3) {
             return true;
         }
-        ScanVerdict verdict = record.getScanStatus();
         return verdict == ScanVerdict.CLEAN || (verdict == ScanVerdict.NOT_SCANNED && !required);
     }
 }

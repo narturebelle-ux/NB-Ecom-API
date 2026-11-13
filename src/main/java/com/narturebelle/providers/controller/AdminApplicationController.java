@@ -1,5 +1,7 @@
 package com.narturebelle.providers.controller;
 
+import com.narturebelle.dto.MultipartUploadRequests;
+import com.narturebelle.storage.SignedDownloadUrl;
 import com.narturebelle.providers.dto.ReviewDtos.BankVerificationRequest;
 import com.narturebelle.providers.dto.ReviewDtos.ChangeDecisionRequest;
 import com.narturebelle.providers.dto.ReviewDtos.ChangeRequestForReview;
@@ -44,6 +46,13 @@ public class AdminApplicationController {
     @GetMapping("/documents/{documentId}/file")
     public ResponseEntity<byte[]> document(@PathVariable Long documentId) {
         return ApplicationController.attachment(reviewService.document(documentId));
+    }
+
+    /** An S3 document as a 10-minute link, audited like /file. 409 FILE_NOT_READY / FILE_BLOCKED; older Postgres files 404. */
+    @PostMapping("/documents/{documentId}/download-url")
+    public ResponseEntity<SignedDownloadUrl> documentDownloadUrl(@PathVariable Long documentId,
+                                                                 @RequestBody(required = false) MultipartUploadRequests.Download body) {
+        return ResponseEntity.ok(reviewService.documentDownloadUrl(documentId, body == null ? null : body.getDisposition()));
     }
 
     @PostMapping("/{id}/operations-decision")
