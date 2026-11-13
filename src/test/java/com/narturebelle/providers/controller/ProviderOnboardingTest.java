@@ -168,14 +168,31 @@ class ProviderOnboardingTest {
     }
 
     @Test
-    void submitNeedsVerifiedPhone() throws Exception {
-        String unverified = "token-no-phone-" + NEXT.getAndIncrement();
-        createUser(unverified, Role.MOTHER, true, false);
+    void aPhoneIsNotNeeded_onlyAVerifiedEmail() throws Exception {
+        // Owner, 12 Nov 2026: no SMS verification for providers (onboarding.require-phone-verification defaults to false).
+        String noPhone = "token-no-phone-" + NEXT.getAndIncrement();
+        createUser(noPhone, Role.MOTHER, true, false);
+        call(post("/api/v1/provider-application").contentType(MediaType.APPLICATION_JSON)
+                .content(json(Map.of("profession", "GYNECOLOGIST", "termsAccepted", true, "verificationConsent", true))), noPhone)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.contactVerified").value(true));
+        // Past the contact check: what stops it now is only the unanswered questions.
+        call(post("/api/v1/provider-application/submit"), noPhone)
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("APPLICATION_INCOMPLETE"));
+    }
+
+    @Test
+    void submitNeedsVerifiedEmail() throws Exception {
+        String unverified = "token-no-email-" + NEXT.getAndIncrement();
+        createUser(unverified, Role.MOTHER, false, true);
         call(post("/api/v1/provider-application").contentType(MediaType.APPLICATION_JSON)
                 .content(json(Map.of("profession", "GYNECOLOGIST", "termsAccepted", true, "verificationConsent", true))), unverified)
-                .andExpect(status().isCreated());
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.contactVerified").value(false));
         call(post("/api/v1/provider-application/submit"), unverified)
-                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("CONTACT_NOT_VERIFIED"));
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("CONTACT_NOT_VERIFIED"))
+                .andExpect(jsonPath("$.message").value("Please verify your email before submitting."));
     }
 
     @Test

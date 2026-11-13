@@ -234,7 +234,9 @@ public class ApplicationService {
         ProviderApplication application = requireEditable();
         FirebaseUserPrincipal principal = authorizationService.currentPrincipal();
         if (!isContactVerified(principal)) {
-            throw new ProviderOnboardingException(409, "CONTACT_NOT_VERIFIED", "Please verify your email and phone before submitting.");
+            throw new ProviderOnboardingException(409, "CONTACT_NOT_VERIFIED", requirePhone
+                    ? "Please verify your email and phone before submitting."
+                    : "Please verify your email before submitting.");
         }
         Map<String, FormQuestion> byKey = catalog.questionsByKey(application.getProfessionalType());
         Map<String, String> answers = answerStore.readAll(application);
@@ -314,6 +316,7 @@ public class ApplicationService {
         return journeyRepository.existsByUserId(userId) || orderRepository.existsByUserId(userId) || intakeRepository.existsByUserId(userId);
     }
 
+    /** A verified email; a verified phone too only when onboarding.require-phone-verification is on (off by default). */
     private boolean isContactVerified(FirebaseUserPrincipal principal) {
         return principal.emailVerified() && (!requirePhone || principal.phone() != null);
     }
