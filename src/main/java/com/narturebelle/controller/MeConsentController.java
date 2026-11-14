@@ -3,6 +3,9 @@ package com.narturebelle.controller;
 import com.narturebelle.dto.GrantConsentRequest;
 import com.narturebelle.exception.ConsentVersionOutdatedException;
 import com.narturebelle.exception.UserProfileNotFoundException;
+import com.narturebelle.mail.MailQueue;
+import com.narturebelle.model.Role;
+import com.narturebelle.repository.UserRepository;
 import com.narturebelle.model.Consent;
 import com.narturebelle.model.ConsentDocument;
 import com.narturebelle.model.ConsentDocumentType;
@@ -20,6 +23,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 @RestController
 @RequestMapping("/api/v1/me/consents")
@@ -30,15 +34,19 @@ public class MeConsentController {
     private final ConsentService consentService;
     private final AuthorizationService authorizationService;
     private final AuditService auditService;
+    private final UserRepository userRepository;
+    private final MailQueue mailQueue;
 
     public MeConsentController(ConsentDocumentRepository consentDocumentRepository, ConsentRepository consentRepository,
                                 ConsentService consentService, AuthorizationService authorizationService,
-                                AuditService auditService) {
+                                AuditService auditService, UserRepository userRepository, MailQueue mailQueue) {
         this.consentDocumentRepository = consentDocumentRepository;
         this.consentRepository = consentRepository;
         this.consentService = consentService;
         this.authorizationService = authorizationService;
         this.auditService = auditService;
+        this.userRepository = userRepository;
+        this.mailQueue = mailQueue;
     }
 
     /** Not @RequireConsent-gated — this is how the user sees what's pending in the first place. */
@@ -77,7 +85,23 @@ public class MeConsentController {
         auditService.record("CONSENT_GRANTED", "Consent", String.valueOf(saved.getId()), null,
                 Map.of("documentType", req.getDocumentType().name(), "documentVersion", req.getDocumentVersion()));
 
+        sendSignupWelcomeIfFirstConsent(principal.userId());
         return ResponseEntity.ok(saved);
+    }
+
+    /**
+     * The mother's sign-up welcome: right after her first-ever terms and privacy grant, the step that follows sign-up.
+     * Provider applicants skip that step. The fixed event ID refuses a second copy when both grants arrive together.
+     */
+    private void sendSignupWelcomeIfFirstConsent(Long userId) {
+        boolean motherOnly = userRepository.findById(userId).map(user -> Set.of(Role.MOTHER).equals(user.getRoles())).orElse(false);
+        if (motherOnly && consentService.firstRequiredConsentsJustCompleted(userId)) {
+            mailQueue.sendToUserOnce("welcome-signup-" + userId, "MOTHER_SIGNUP_WELCOME", userId,
+                    "Welcome to NartureBelle, let's get you set up",
+                    "Hello,\n\nYour NartureBelle account is ready. A few short steps and your care team can begin: "
+                            + "tell us about you, choose your care plan, meet your care coordinator, and sign your onboarding agreement.\n\n"
+                            + "Continue here: https://www.narturebelle.com/onboarding\n\n-- The NartureBelle team");
+        }
     }
 
     @PostMapping("/{type}/revoke")

@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.narturebelle.providers.dto.FormDtos.FormQuestion;
 import com.narturebelle.providers.dto.FormDtos.QuestionType;
 import com.narturebelle.mail.MailsClient;
+import com.narturebelle.mail.OutgoingMail;
 import com.narturebelle.providers.model.ApplicationStatus;
 import com.narturebelle.model.BookingStatus;
 import com.narturebelle.providers.model.ProviderApplication;
@@ -30,6 +31,7 @@ import com.narturebelle.providers.service.ApplicationNotifier;
 import com.narturebelle.providers.service.ProviderLifecycleService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -52,6 +54,8 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -157,6 +161,20 @@ class ProviderOnboardingTest {
         journeyRepository.save(journey);
 
         start(Role.GYNECOLOGIST).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("MOTHER_ACCOUNT"));
+    }
+
+    @Test
+    void startingAFirstApplication_sendsTheProviderSignupWelcomeOnce() throws Exception {
+        start(Role.GYNECOLOGIST).andExpect(status().isCreated());
+        call(post("/api/v1/provider-application/withdraw"), applicant).andExpect(status().isOk());
+        start(Role.GYNECOLOGIST).andExpect(status().isCreated());
+
+        ArgumentCaptor<OutgoingMail> sent = ArgumentCaptor.forClass(OutgoingMail.class);
+        verify(mailsClient, atLeastOnce()).send(sent.capture());
+        List<OutgoingMail> welcomes = sent.getAllValues().stream()
+                .filter(mail -> "PROVIDER_SIGNUP_WELCOME".equals(mail.eventType())).toList();
+        assertEquals(1, welcomes.size(), "reapplying sends no second welcome");
+        assertEquals(applicantId, welcomes.get(0).userId());
     }
 
     @Test

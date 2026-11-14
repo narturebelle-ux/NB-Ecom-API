@@ -235,7 +235,7 @@ public class ApplicationReviewService {
 
         auditService.record("PROVIDER_APPLICATION_APPROVED", "PROVIDER_APPLICATION", String.valueOf(application.getId()), req.reason(),
                 Map.of("providerId", provider.getId()));
-        notifier.notifyUser(application.getUserId(), "Your NartureBelle application is approved",
+        notifier.notifyUser("PROVIDER_APPROVED", application.getUserId(), "Your NartureBelle application is approved",
                 "Congratulations, your application is approved. Please sign in to finish setup: your agreement, bank details, training, services and availability. Mothers will see you once you are live.");
     }
 

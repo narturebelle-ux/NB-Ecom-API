@@ -153,6 +153,13 @@ public class ApplicationService {
         ProviderApplication saved = applicationRepository.save(application);
         auditService.record("PROVIDER_APPLICATION_STARTED", "PROVIDER_APPLICATION", String.valueOf(saved.getId()), null,
                 Map.of("profession", req.profession().name()));
+        // The professional's sign-up welcome: accepting the application terms is their first step after sign-up.
+        // First application only, so reapplying after a withdrawal or rejection sends nothing new.
+        if (latest.isEmpty()) {
+            notifier.notifyUser("PROVIDER_SIGNUP_WELCOME", userId, "Welcome to NartureBelle, let's complete your application",
+                    "Thank you for applying to care for mothers with NartureBelle. Your answers save as you go, so you can "
+                            + "finish your application at any time: https://www.narturebelle.com/provider/apply");
+        }
         return toResponse(saved);
     }
 

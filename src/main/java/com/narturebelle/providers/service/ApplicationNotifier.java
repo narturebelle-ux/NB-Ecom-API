@@ -16,6 +16,11 @@ public class ApplicationNotifier {
     }
 
     public void notifyUser(Long userId, String subject, String body) {
-        mailQueue.sendToUser("PROVIDER_APPLICATION_STATUS", userId, subject, body + SIGN_OFF);
+        notifyUser("PROVIDER_APPLICATION_STATUS", userId, subject, body);
+    }
+
+    /** With its own event type, so NB-Ecom-Notifications-API can send its designed version (e.g. PROVIDER_LIVE). */
+    public void notifyUser(String eventType, Long userId, String subject, String body) {
+        mailQueue.sendToUser(eventType, userId, subject, body + SIGN_OFF);
     }
 }

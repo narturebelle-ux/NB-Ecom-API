@@ -1,5 +1,7 @@
 package com.narturebelle.controller;
 
+import com.narturebelle.mail.MailsClient;
+import com.narturebelle.mail.OutgoingMail;
 import com.narturebelle.model.Role;
 import com.narturebelle.model.User;
 import com.narturebelle.repository.ConsentRepository;
@@ -8,6 +10,7 @@ import com.narturebelle.security.FirebaseTokenVerifier;
 import com.narturebelle.security.VerifiedFirebaseToken;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -18,6 +21,11 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.Set;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -42,6 +50,9 @@ class ConsentTest {
 
     @MockBean
     private FirebaseTokenVerifier firebaseTokenVerifier;
+
+    @MockBean
+    private MailsClient mailsClient;
 
     @BeforeEach
     void setUp() throws Exception {
@@ -91,6 +102,42 @@ class ConsentTest {
         mockMvc.perform(get("/api/v1/me/consents").header("Authorization", "Bearer " + TOKEN))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.pending", org.hamcrest.Matchers.contains("PRIVACY")));
+    }
+
+    @Test
+    void firstTermsAndPrivacy_sendTheSignupWelcomeOnce_andARegrantSendsNoMore() throws Exception {
+        grant("TERMS");
+        verify(mailsClient, never()).send(any());
+        grant("PRIVACY");
+
+        ArgumentCaptor<OutgoingMail> sent = ArgumentCaptor.forClass(OutgoingMail.class);
+        verify(mailsClient, times(1)).send(sent.capture());
+        assertEquals("MOTHER_SIGNUP_WELCOME", sent.getValue().eventType());
+        assertEquals("welcome-signup-" + sent.getValue().userId(), sent.getValue().eventId());
+
+        mockMvc.perform(post("/api/v1/me/consents/PRIVACY/revoke").header("Authorization", "Bearer " + TOKEN))
+                .andExpect(status().isOk());
+        grant("PRIVACY");
+        verify(mailsClient, times(1)).send(any());
+    }
+
+    @Test
+    void staffAccounts_getNoSignupWelcome() throws Exception {
+        User user = userRepository.findByFirebaseUid("uid-consent").orElseThrow();
+        user.setRoles(new java.util.HashSet<>(Set.of(Role.MOTHER, Role.OPERATIONS_ADMIN)));
+        userRepository.save(user);
+
+        grant("TERMS");
+        grant("PRIVACY");
+        verify(mailsClient, never()).send(any());
+    }
+
+    private void grant(String type) throws Exception {
+        mockMvc.perform(post("/api/v1/me/consents")
+                        .header("Authorization", "Bearer " + TOKEN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"documentType\":\"" + type + "\",\"documentVersion\":1}"))
+                .andExpect(status().isOk());
     }
 
     @Test

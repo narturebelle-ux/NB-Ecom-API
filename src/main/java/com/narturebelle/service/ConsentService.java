@@ -68,6 +68,18 @@ public class ConsentService {
         return userId != null && consentRepository.existsByUserIdAndDocumentTypeAndRevokedAtIsNull(userId, type);
     }
 
+    /**
+     * True right after the user's first-ever grant of every required document: nothing is pending, and each
+     * required type was granted exactly once. A re-grant after a new version or a revoke makes the count higher.
+     */
+    public boolean firstRequiredConsentsJustCompleted(Long userId) {
+        long requiredTypes = consentDocumentRepository.findByActiveTrue().stream()
+                .filter(doc -> doc.getType().isRequired()).map(ConsentDocument::getType).distinct().count();
+        long requiredGrants = consentRepository.findByUserIdOrderByGrantedAtDesc(userId).stream()
+                .filter(consent -> consent.getDocumentType().isRequired()).count();
+        return requiredTypes > 0 && requiredGrants == requiredTypes && pendingConsentTypes(userId).isEmpty();
+    }
+
     public List<Consent> history(Long userId) {
         return consentRepository.findByUserIdOrderByGrantedAtDesc(userId);
     }

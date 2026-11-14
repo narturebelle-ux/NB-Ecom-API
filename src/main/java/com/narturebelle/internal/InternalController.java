@@ -22,7 +22,8 @@ public class InternalController {
 
     public record Identity(Long userId, Set<String> roles) {}
 
-    public record Contact(String email) {}
+    /** firstName lets an email greet the person by name; it may be null. */
+    public record Contact(String email, String firstName) {}
 
     public record ConsentStatus(List<String> pending) {}
 
@@ -54,8 +55,8 @@ public class InternalController {
     /** Asked at send time, so callers keep no copy of the address. */
     @GetMapping("/users/{id}/contact")
     public ResponseEntity<Contact> contact(@PathVariable Long id) {
-        return userRepository.findById(id).map(User::getEmail)
-                .map(email -> ResponseEntity.ok(new Contact(email)))
+        return userRepository.findById(id).filter(user -> user.getEmail() != null)
+                .map(user -> ResponseEntity.ok(new Contact(user.getEmail(), user.getFirstName())))
                 .orElse(ResponseEntity.notFound().build());
     }
 

@@ -96,7 +96,7 @@ public class ProviderLifecycleService {
                 Map.of("providerId", provider.getId()));
         auditService.record("ROLE_GRANTED", "User", String.valueOf(user.getId()), "Provider went live",
                 Map.of("role", application.getProfessionalType().name()));
-        notifier.notifyUser(application.getUserId(), "You're live on NartureBelle",
+        notifier.notifyUser("PROVIDER_LIVE", application.getUserId(), "You're live on NartureBelle",
                 "Your profile is now visible and mothers can book sessions with you. Your dashboard has your sessions and availability.");
     }
 
